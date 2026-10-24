@@ -1,0 +1,405 @@
+{
+  "answer_id": "a_demo_0001",
+  "question": "Tell me about A. P. J. Abdul Kalam.",
+  "answer_text": "A. P. J. Abdul Kalam was born on 15 October 1935 in Rameswaram, Tamil Nadu. He served as the 11th President of India from 2002 to 2007. He received the Bharat Ratna, India's highest civilian award, in 1997. He won the Nobel Prize in Physics in 1998. He wrote the autobiography Wings of Fire. He was popularly known as the Missile Man of India.",
+  "claims": [
+    {
+      "claim_id": "c_0001",
+      "answer_id": "a_demo_0001",
+      "text": "A. P. J. Abdul Kalam was born on 15 October 1935 in Rameswaram, Tamil Nadu.",
+      "span": {
+        "start": 0,
+        "end": 75
+      },
+      "claim_type": "factual",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "c_0002",
+      "answer_id": "a_demo_0001",
+      "text": "He served as the 11th President of India from 2002 to 2007.",
+      "span": {
+        "start": 76,
+        "end": 135
+      },
+      "claim_type": "factual",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "c_0003",
+      "answer_id": "a_demo_0001",
+      "text": "He received the Bharat Ratna, India's highest civilian award, in 1997.",
+      "span": {
+        "start": 136,
+        "end": 206
+      },
+      "claim_type": "factual",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "c_0004",
+      "answer_id": "a_demo_0001",
+      "text": "He won the Nobel Prize in Physics in 1998.",
+      "span": {
+        "start": 207,
+        "end": 249
+      },
+      "claim_type": "factual",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "c_0005",
+      "answer_id": "a_demo_0001",
+      "text": "He wrote the autobiography Wings of Fire.",
+      "span": {
+        "start": 250,
+        "end": 291
+      },
+      "claim_type": "factual",
+      "importance": "normal"
+    },
+    {
+      "claim_id": "c_0006",
+      "answer_id": "a_demo_0001",
+      "text": "He was popularly known as the Missile Man of India.",
+      "span": {
+        "start": 292,
+        "end": 343
+      },
+      "claim_type": "factual",
+      "importance": "normal"
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "e_0001_1",
+      "claim_id": "c_0001",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/A._P._J._Abdul_Kalam",
+      "passage": "Kalam was born on 15 October 1931 to a Tamil Muslim family in Rameswaram, then in the Madras Presidency. His father Jainulabdeen was a boat owner.",
+      "retrieved_at": null,
+      "highlight_score": 0.5005,
+      "highlight_span": {
+        "start": 0,
+        "end": 104
+      }
+    },
+    {
+      "evidence_id": "e_0001_2",
+      "claim_id": "c_0001",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rameswaram",
+      "passage": "Rameswaram is a town on Pamban Island in the Ramanathapuram district of Tamil Nadu. It is one of the best-known pilgrimage centres in South India.",
+      "retrieved_at": null,
+      "highlight_score": 0.2154,
+      "highlight_span": {
+        "start": 0,
+        "end": 83
+      }
+    },
+    {
+      "evidence_id": "e_0002_1",
+      "claim_id": "c_0002",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/A._P._J._Abdul_Kalam",
+      "passage": "Kalam served as the 11th president of India from 2002 to 2007. He was elected in 2002 with the support of both the ruling Bharatiya Janata Party and the opposition Indian National Congress.",
+      "retrieved_at": null,
+      "highlight_score": 0.9199,
+      "highlight_span": {
+        "start": 0,
+        "end": 62
+      }
+    },
+    {
+      "evidence_id": "e_0003_1",
+      "claim_id": "c_0003",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/A._P._J._Abdul_Kalam",
+      "passage": "Kalam received several of India's highest civilian honours. He was awarded the Padma Bhushan in 1981 and the Padma Vibhushan in 1990, and he received the Bharat Ratna, India's highest civilian award, in 1997.",
+      "retrieved_at": null,
+      "highlight_score": 0.7177,
+      "highlight_span": {
+        "start": 60,
+        "end": 208
+      }
+    },
+    {
+      "evidence_id": "e_0004_1",
+      "claim_id": "c_0004",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/A._P._J._Abdul_Kalam",
+      "passage": "Kalam received several of India's highest civilian honours. He was awarded the Padma Bhushan in 1981 and the Padma Vibhushan in 1990, and he received the Bharat Ratna, India's highest civilian award, in 1997.",
+      "retrieved_at": null,
+      "highlight_score": 0.0525,
+      "highlight_span": null
+    },
+    {
+      "evidence_id": "e_0004_2",
+      "claim_id": "c_0004",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Pokhran-II",
+      "passage": "In 1998 Kalam played a central organisational and technical role in India's Pokhran-II nuclear tests. He was then the chief scientific adviser to the prime minister.",
+      "retrieved_at": null,
+      "highlight_score": 0.1083,
+      "highlight_span": null
+    },
+    {
+      "evidence_id": "e_0005_1",
+      "claim_id": "c_0005",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wings_of_Fire_(autobiography)",
+      "passage": "Wings of Fire is the autobiography of Kalam, written with Arun Tiwari and published in 1999. It covers his early life and his work on India's missile programme.",
+      "retrieved_at": null,
+      "highlight_score": 0.3667,
+      "highlight_span": {
+        "start": 0,
+        "end": 92
+      }
+    },
+    {
+      "evidence_id": "e_0006_1",
+      "claim_id": "c_0006",
+      "source": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/A._P._J._Abdul_Kalam",
+      "passage": "For his work on ballistic missile and launch vehicle technology, Kalam came to be known as the Missile Man of India.",
+      "retrieved_at": null,
+      "highlight_score": 0.5333,
+      "highlight_span": {
+        "start": 0,
+        "end": 116
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "claim_id": "c_0001",
+      "final_verdict": "contradicted",
+      "verifier_agreement": true,
+      "needs_human_review": false,
+      "verifier_results": [
+        {
+          "claim_id": "c_0001",
+          "verifier": "gemini",
+          "verdict": "contradicted",
+          "confidence": 0.95,
+          "explanation": "Evidence e_0001_1 contradicts the claim by stating that Kalam was born on 15 October 1931, not 15 October 1935.",
+          "evidence_ids": [
+            "e_0001_1"
+          ],
+          "model_version": "gemini-3.5-flash"
+        },
+        {
+          "claim_id": "c_0001",
+          "verifier": "groq_qwen",
+          "verdict": "contradicted",
+          "confidence": 1.0,
+          "explanation": "The evidence states Kalam was born on 15 October 1931, which contradicts the claim's date of 15 October 1935.",
+          "evidence_ids": [
+            "e_0001_1"
+          ],
+          "model_version": "qwen/qwen3.8-27b"
+        }
+      ],
+      "self_consistency_score": null,
+      "evidence_relevance_score": null,
+      "correction_text": "Kalam was born on 15 October 1931 in Rameswaram, then in the Madras Presidency.",
+      "correction_verified": true,
+      "correction_support_score": 0.7888,
+      "cache_hit": false
+    },
+    {
+      "claim_id": "c_0002",
+      "final_verdict": "supported",
+      "verifier_agreement": true,
+      "needs_human_review": false,
+      "verifier_results": [
+        {
+          "claim_id": "c_0002",
+          "verifier": "gemini",
+          "verdict": "supported",
+          "confidence": 1.0,
+          "explanation": "Passage e_0002_1 explicitly states that Kalam served as the 11th president of India from 2002 to 2007.",
+          "evidence_ids": [
+            "e_0002_1"
+          ],
+          "model_version": "gemini-3.5-flash"
+        },
+        {
+          "claim_id": "c_0002",
+          "verifier": "groq_qwen",
+          "verdict": "supported",
+          "confidence": 1.0,
+          "explanation": "The evidence explicitly states that Kalam served as the 11th president of India from 2002 to 2007, which matches the claim.",
+          "evidence_ids": [
+            "e_0002_1"
+          ],
+          "model_version": "qwen/qwen3.8-27b"
+        }
+      ],
+      "self_consistency_score": null,
+      "evidence_relevance_score": null,
+      "correction_text": null,
+      "correction_verified": null,
+      "correction_support_score": null,
+      "cache_hit": false
+    },
+    {
+      "claim_id": "c_0003",
+      "final_verdict": "supported",
+      "verifier_agreement": true,
+      "needs_human_review": false,
+      "verifier_results": [
+        {
+          "claim_id": "c_0003",
+          "verifier": "gemini",
+          "verdict": "supported",
+          "confidence": 1.0,
+          "explanation": "Evidence e_0003_1 explicitly states that Kalam received the Bharat Ratna, India's highest civilian award, in 1997.",
+          "evidence_ids": [
+            "e_0003_1"
+          ],
+          "model_version": "gemini-3.5-flash"
+        },
+        {
+          "claim_id": "c_0003",
+          "verifier": "groq_qwen",
+          "verdict": "supported",
+          "confidence": 1.0,
+          "explanation": "The evidence explicitly states that Kalam received the Bharat Ratna, India's highest civilian award, in 1997.",
+          "evidence_ids": [
+            "e_0003_1"
+          ],
+          "model_version": "qwen/qwen3.8-27b"
+        }
+      ],
+      "self_consistency_score": null,
+      "evidence_relevance_score": null,
+      "correction_text": null,
+      "correction_verified": null,
+      "correction_support_score": null,
+      "cache_hit": false
+    },
+    {
+      "claim_id": "c_0004",
+      "final_verdict": "unverifiable",
+      "verifier_agreement": true,
+      "needs_human_review": false,
+      "verifier_results": [
+        {
+          "claim_id": "c_0004",
+          "verifier": "gemini",
+          "verdict": "unverifiable",
+          "confidence": 0.95,
+          "explanation": "The provided evidence details Kalam's civilian honours and his role in nuclear tests in 1998, but it does not mention whether he won the Nobel Prize in Physics in 1998.",
+          "evidence_ids": [
+            "e_0004_1",
+            "e_0004_2"
+          ],
+          "model_version": "gemini-3.5-flash"
+        },
+        {
+          "claim_id": "c_0004",
+          "verifier": "groq_qwen",
+          "verdict": "unverifiable",
+          "confidence": 1.0,
+          "explanation": "The evidence mentions Kalam's role in the 1998 Pokhran-II nuclear tests and his civilian awards, but does not mention a Nobel Prize in Physics.",
+          "evidence_ids": [
+            "e_0004_1",
+            "e_0004_2"
+          ],
+          "model_version": "qwen/qwen3.8-27b"
+        }
+      ],
+      "self_consistency_score": null,
+      "evidence_relevance_score": null,
+      "correction_text": null,
+      "correction_verified": null,
+      "correction_support_score": null,
+      "cache_hit": false
+    },
+    {
+      "claim_id": "c_0005",
+      "final_verdict": "supported",
+      "verifier_agreement": true,
+      "needs_human_review": false,
+      "verifier_results": [
+        {
+          "claim_id": "c_0005",
+          "verifier": "gemini",
+          "verdict": "supported",
+          "confidence": 0.9,
+          "explanation": "According to evidence [e_0005_1], Wings of Fire is the autobiography of Kalam, written with Arun Tiwari.",
+          "evidence_ids": [
+            "e_0005_1"
+          ],
+          "model_version": "gemini-3.5-flash"
+        },
+        {
+          "claim_id": "c_0005",
+          "verifier": "groq_qwen",
+          "verdict": "supported",
+          "confidence": 1.0,
+          "explanation": "The evidence explicitly states that 'Wings of Fire is the autobiography of Kalam', confirming the claim that he wrote it.",
+          "evidence_ids": [
+            "e_0005_1"
+          ],
+          "model_version": "qwen/qwen3.8-27b"
+        }
+      ],
+      "self_consistency_score": null,
+      "evidence_relevance_score": null,
+      "correction_text": null,
+      "correction_verified": null,
+      "correction_support_score": null,
+      "cache_hit": false
+    },
+    {
+      "claim_id": "c_0006",
+      "final_verdict": "supported",
+      "verifier_agreement": true,
+      "needs_human_review": false,
+      "verifier_results": [
+        {
+          "claim_id": "c_0006",
+          "verifier": "gemini",
+          "verdict": "supported",
+          "confidence": 0.95,
+          "explanation": "According to passage e_0006_1, Kalam came to be known as the Missile Man of India for his work on ballistic missile and launch vehicle technology.",
+          "evidence_ids": [
+            "e_0006_1"
+          ],
+          "model_version": "gemini-3.5-flash"
+        },
+        {
+          "claim_id": "c_0006",
+          "verifier": "groq_qwen",
+          "verdict": "supported",
+          "confidence": 1.0,
+          "explanation": "The evidence explicitly states that Kalam came to be known as the Missile Man of India for his work on ballistic missile technology.",
+          "evidence_ids": [
+            "e_0006_1"
+          ],
+          "model_version": "qwen/qwen3.8-27b"
+        }
+      ],
+      "self_consistency_score": null,
+      "evidence_relevance_score": null,
+      "correction_text": null,
+      "correction_verified": null,
+      "correction_support_score": null,
+      "cache_hit": false
+    }
+  ],
+  "trust_score": {
+    "answer_id": "a_demo_0001",
+    "trust_score": 0.75,
+    "method": "placeholder_until_m1",
+    "claim_breakdown": {
+      "supported": 4,
+      "contradicted": 1,
+      "unverifiable": 1
+    },
+    "disclaimer": "Placeholder score (supported = 1, unverifiable = 0.5, contradicted = 0) until M1's trained trust model is merged. Not a probability."
+  },
+  "created_at": "2026-10-24T13:31:48Z"
+}
