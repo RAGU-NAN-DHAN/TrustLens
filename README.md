@@ -8,8 +8,8 @@ Full plan and work split: `TrustLens_Context.md` (in the team chat). Contract ch
 
 | Part | Owner | Status |
 |---|---|---|
-| Verifiers (Gemini + Groq), disagreement rule, correction + checker, evidence highlighting, UI | M3 | Built. Runs on mock data; real API mode written but not yet run with keys |
-| Generation, self-consistency, embeddings, trust model, evaluation | M1 | Not started (placeholders in use) |
+| Verifiers (Gemini + Groq), disagreement rule, correction + checker, evidence highlighting, UI | M3 | Built and tested with real Gemini 3.5 Flash + Groq qwen3.8-27b |
+| Generation, self-consistency, embeddings, trust model, evaluation | M1 | Built separately (trustlens-m1, 70 tests), not merged yet |
 | Claim splitting, retrieval, ranking, cache, server, database | M2 | Not started (hand-written demo claims and evidence in use) |
 
 ## Run it
@@ -35,6 +35,17 @@ npm install
 npm test
 npm run dev        # http://localhost:5180
 ```
+
+Animation test page (dev only, not deployed):
+
+```bash
+cd frontend
+npm run anim       # http://localhost:5190, one button per animation
+```
+
+## Deploy on Render
+
+`render.yaml` deploys the website as a static site from `frontend/`. Only `frontend/index.html` is built, so the animation test page is never published. Until M2's backend is online the site runs in demo mode with the saved real-API run.
 
 ## API keys
 

@@ -84,7 +84,8 @@ export function createClient({ baseUrl, useMock, fetchImpl, sample: chosen }: Cl
       isMock: true,
       sampleIsLive: isLiveRun(sampleAnalysis),
       async analyze() {
-        await delay(400);
+        // long enough for the loading animation to be seen in the demo
+        await delay(2600);
         return copy(sampleAnalysis);
       },
       async getAnalysis(answerId) {

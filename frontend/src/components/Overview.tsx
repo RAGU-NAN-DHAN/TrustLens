@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "../types/trustlens";
+import type { AnalysisResult, Verdict } from "../types/trustlens";
 import { VERIFIER_LABEL, percent } from "./verdict";
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
@@ -12,17 +12,33 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
   );
 }
 
-export default function Overview({ analysis }: { analysis: AnalysisResult | null }) {
+interface Props {
+  analysis: AnalysisResult | null;
+  preview?: string | null;
+  onPreview?: (v: Verdict) => void;
+}
+
+export default function Overview({ analysis, preview, onPreview }: Props) {
   const b = analysis?.trust_score.claim_breakdown;
   const count = (k: string) => (b ? String(b[k] ?? 0) : "—");
 
   return (
     <section className="overview">
-      <div className="claim-strip" aria-hidden="true">
+      <div className="claim-strip">
         <span className="br">[</span>
-        {(analysis?.decisions ?? Array.from({ length: 12 }, () => null)).map((d, i) => (
-          <span key={i} className={`cell ${d ? `cell-${d.final_verdict}` : ""}`} />
-        ))}
+        {(analysis?.decisions ?? Array.from({ length: 12 }, () => null)).map((d, i) =>
+          d ? (
+            <button
+              key={i}
+              type="button"
+              className={`cell cell-${d.final_verdict} ${preview === d.final_verdict ? "cell-active" : ""}`}
+              title={`Claim ${i + 1}: ${d.final_verdict} (click to preview its animation)`}
+              onClick={() => onPreview?.(d.final_verdict)}
+            />
+          ) : (
+            <span key={i} className="cell" aria-hidden="true" />
+          ),
+        )}
         <span className="br">]</span>
       </div>
 

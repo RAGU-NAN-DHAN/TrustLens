@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 
-export const PALETTES = ["mono", "signal", "aurora", "blueprint", "phosphor"] as const;
+export const THEMES = ["dark", "light", "graphite"] as const;
+export const PALETTE = "heat";
 export const UIS = ["terminal", "console", "analytics"] as const;
 export type UiName = (typeof UIS)[number];
 
 function load<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
-    const param = key === "trustlens.ui" ? "ui" : "palette";
+    const param = key === "trustlens.ui" ? "ui" : "theme";
     const fromUrl = new URLSearchParams(window.location.search).get(param);
     const saved = fromUrl ?? localStorage.getItem(key);
     if (saved && (allowed as readonly string[]).includes(saved)) return saved as T;
@@ -24,13 +25,14 @@ function save(key: string, value: string) {
   }
 }
 
-export function usePalette(): [string, (p: string) => void] {
-  const [palette, setPalette] = useState<string>(() => load("trustlens.palette", PALETTES, "mono"));
+export function useTheme(): [string, (t: string) => void] {
+  const [theme, setTheme] = useState<string>(() => load("trustlens.theme", THEMES, "dark"));
   useEffect(() => {
-    document.documentElement.dataset.palette = palette;
-    save("trustlens.palette", palette);
-  }, [palette]);
-  return [palette, setPalette];
+    document.documentElement.dataset.palette = PALETTE;
+    document.documentElement.dataset.theme = theme;
+    save("trustlens.theme", theme);
+  }, [theme]);
+  return [theme, setTheme];
 }
 
 export function useUi(): [UiName, (u: UiName) => void] {

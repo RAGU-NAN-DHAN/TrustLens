@@ -31,8 +31,8 @@ type Tab = "overview" | "claims" | "evidence" | "history";
 interface Props {
   ui: UiName;
   onUi: (u: UiName) => void;
-  palette: string;
-  onPalette: (p: string) => void;
+  theme: string;
+  onTheme: (t: string) => void;
 }
 
 const VAR = { supported: "var(--sup)", contradicted: "var(--con)", unverifiable: "var(--unv)" } as const;
@@ -277,7 +277,7 @@ function ExceptionTable({ rows, onPick, picked }: { rows: ClaimRow[]; onPick: (i
   );
 }
 
-export default function ConsoleApp({ ui, onUi, palette, onPalette }: Props) {
+export default function ConsoleApp({ ui, onUi, theme, onTheme }: Props) {
   const { result, loading, error, analyze, open, isMock } = useAnalysis();
   const [question, setQuestion] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
@@ -373,7 +373,7 @@ export default function ConsoleApp({ ui, onUi, palette, onPalette }: Props) {
                 </button>
               ))}
             </div>
-            <UiSwitch ui={ui} onUi={onUi} palette={palette} onPalette={onPalette} className="cx-switch" />
+            <UiSwitch ui={ui} onUi={onUi} theme={theme} onTheme={onTheme} className="cx-switch" />
           </div>
 
           {isMock && <p className="cx-note">Demo mode: every question loads one saved analysis (hand-written claims and evidence, real Gemini + Groq verdicts).</p>}

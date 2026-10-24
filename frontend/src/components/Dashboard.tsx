@@ -3,30 +3,37 @@ import { ApiError, client as defaultClient, type TrustLensClient } from "../api/
 import type { AnalysisResult } from "../types/trustlens";
 import AnswerView from "./AnswerView";
 import ClaimCard from "./ClaimCard";
-import LensSphere from "./LensSphere";
+import LensScene, { type SceneMode } from "./LensScene";
 import Overview from "./Overview";
 import { percent } from "./verdict";
 
-// grouped blue, red, white on the sphere so the slices never read as the French flag
-const SPHERE_ORDER = { unverifiable: 0, contradicted: 1, supported: 2 } as const;
-
-function sphereOrder(result: AnalysisResult | null) {
-  if (!result) return [];
-  return result.decisions.map((d) => d.final_verdict).sort((a, b) => SPHERE_ORDER[a] - SPHERE_ORDER[b]);
+function outcomeOf(result: AnalysisResult): SceneMode {
+  const verdicts = result.decisions.map((d) => d.final_verdict);
+  if (verdicts.includes("contradicted")) return "contradicted";
+  if (verdicts.includes("unverifiable")) return "unverifiable";
+  return "supported";
 }
+
+const SCENE_CAPTION: Record<SceneMode, string> = {
+  idle: "idle · awaiting an answer",
+  loading: "auditing claims…",
+  supported: "every claim verified",
+  contradicted: "contradiction found",
+  unverifiable: "some claims cannot be verified",
+};
 
 interface Props {
   client?: TrustLensClient;
   result: AnalysisResult | null;
   onResult: (result: AnalysisResult) => void;
   onHistory?: () => void;
-  palette?: string;
 }
 
-export default function Dashboard({ client = defaultClient, result, onResult, onHistory, palette = "signal" }: Props) {
+export default function Dashboard({ client = defaultClient, result, onResult, onHistory }: Props) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<SceneMode | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -34,6 +41,7 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
     if (!q || loading) return;
     setLoading(true);
     setError(null);
+    setPreview(null);
     try {
       onResult(await client.analyze(q));
     } catch (err) {
@@ -46,6 +54,7 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
   const evidenceFor = (claimId: string) => (result?.evidence ?? []).filter((e) => e.claim_id === claimId);
   const decisionFor = (claimId: string) => result?.decisions.find((d) => d.claim_id === claimId);
   const score = result?.trust_score.trust_score;
+  const scene: SceneMode = loading ? "loading" : !result ? "idle" : (preview ?? outcomeOf(result));
   const level = score === undefined ? "" : score >= 0.8 ? "t-supported" : score >= 0.5 ? "t-unverifiable" : "t-contradicted";
 
   return (
@@ -90,7 +99,7 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
             </p>
           )}
 
-          <Overview analysis={result} />
+          <Overview analysis={result} preview={preview} onPreview={(v) => setPreview(preview === v ? null : v)} />
         </div>
 
         <div className="hero-right">
@@ -102,13 +111,14 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
           <span className="mark bc" />
           <span className="red-dot rd-1" />
           <span className="red-dot rd-2" />
-          <LensSphere verdicts={sphereOrder(result)} palette={palette} />
+          <LensScene mode={scene} palette="heat" />
           <div className="lens-label">
             <span className="br">[</span> trust <b className={level}>{score === undefined ? "—" : percent(score)}</b>{" "}
             <span className="br">]</span>
           </div>
           <div className="lens-caption">
-            {loading ? "auditing claims…" : result ? `${result.claims.length} claims · one slice each` : "idle · awaiting an answer"}
+            {SCENE_CAPTION[scene]}
+            {preview && " · preview (click the square again to reset)"}
           </div>
         </div>
       </section>

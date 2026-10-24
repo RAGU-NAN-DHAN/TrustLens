@@ -32,8 +32,8 @@ type Page = "overview" | "claims" | "evidence" | "history" | "settings";
 interface Props {
   ui: UiName;
   onUi: (u: UiName) => void;
-  palette: string;
-  onPalette: (p: string) => void;
+  theme: string;
+  onTheme: (t: string) => void;
 }
 
 function StatCard({ icon, label, value, sub, series, tone }: { icon: ReactNode; label: string; value: string; sub: string; series: number[]; tone: "violet" | "green" | "blue" | "amber" }) {
@@ -60,7 +60,7 @@ function verdictChip(v?: string) {
   return <span className={`ax-chip c-${v}`}>{VERDICT_LABEL[v as keyof typeof VERDICT_LABEL]}</span>;
 }
 
-export default function AnalyticsApp({ ui, onUi, palette, onPalette }: Props) {
+export default function AnalyticsApp({ ui, onUi, theme, onTheme }: Props) {
   const { result, loading, error, history, analyze, open, isMock } = useAnalysis();
   const [question, setQuestion] = useState("");
   const [page, setPage] = useState<Page>("overview");
@@ -437,7 +437,7 @@ export default function AnalyticsApp({ ui, onUi, palette, onPalette }: Props) {
         {page === "settings" && (
           <section className="ax-card ax-pad ax-settings">
             <h3>Appearance</h3>
-            <UiSwitch ui={ui} onUi={onUi} palette={palette} onPalette={onPalette} className="ax-switch" />
+            <UiSwitch ui={ui} onUi={onUi} theme={theme} onTheme={onTheme} className="ax-switch" />
             <h3>Data source</h3>
             <p className="muted">{isMock ? "Demo mode: the sample analysis and offline mock verifiers. Connect the backend and API keys to go live." : "Connected to the TrustLens backend."}</p>
           </section>
@@ -445,7 +445,7 @@ export default function AnalyticsApp({ ui, onUi, palette, onPalette }: Props) {
 
         {page !== "settings" && (
           <div className="ax-footer">
-            <UiSwitch ui={ui} onUi={onUi} palette={palette} onPalette={onPalette} className="ax-switch" />
+            <UiSwitch ui={ui} onUi={onUi} theme={theme} onTheme={onTheme} className="ax-switch" />
           </div>
         )}
       </main>

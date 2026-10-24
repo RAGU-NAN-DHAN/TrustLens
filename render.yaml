@@ -1,0 +1,12 @@
+# Render Blueprint: deploys only the TrustLens website (frontend/dist).
+# The dev-only animation test page in frontend/anim-viewer is never built or published.
+services:
+  - type: web
+    name: trustlens
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_USE_MOCK
+        value: "true"

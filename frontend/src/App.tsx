@@ -11,11 +11,11 @@ type View = "check" | "history";
 interface Props {
   ui: UiName;
   onUi: (u: UiName) => void;
-  palette: string;
-  onPalette: (p: string) => void;
+  theme: string;
+  onTheme: (t: string) => void;
 }
 
-export default function App({ ui, onUi, palette, onPalette }: Props) {
+export default function App({ ui, onUi, theme, onTheme }: Props) {
   const [view, setView] = useState<View>("check");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export default function App({ ui, onUi, palette, onPalette }: Props) {
             </span>
           </div>
           <nav>
-            <UiSwitch ui={ui} onUi={onUi} palette={palette} onPalette={onPalette} className="tx-switch" />
+            <UiSwitch ui={ui} onUi={onUi} theme={theme} onTheme={onTheme} className="tx-switch" />
             <button type="button" className={view === "check" ? "tab active" : "tab"} onClick={() => setView("check")}>
               Check
             </button>
@@ -68,7 +68,7 @@ export default function App({ ui, onUi, palette, onPalette }: Props) {
 
         <main>
           {view === "check" ? (
-            <Dashboard result={result} onResult={setResult} onHistory={() => setView("history")} palette={palette} />
+            <Dashboard result={result} onResult={setResult} onHistory={() => setView("history")} />
           ) : (
             <section className="history-view">
               <h2 className="display">History</h2>

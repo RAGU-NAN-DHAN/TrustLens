@@ -1,14 +1,16 @@
-import { PALETTES, UIS, type UiName } from "../prefs";
+import { THEMES, UIS, type UiName } from "../prefs";
+
+const THEME_LABEL: Record<string, string> = { dark: "Dark", light: "Light", graphite: "Graphite" };
 
 interface Props {
   ui: UiName;
   onUi: (ui: UiName) => void;
-  palette: string;
-  onPalette: (p: string) => void;
+  theme: string;
+  onTheme: (t: string) => void;
   className?: string;
 }
 
-export default function UiSwitch({ ui, onUi, palette, onPalette, className = "" }: Props) {
+export default function UiSwitch({ ui, onUi, theme, onTheme, className = "" }: Props) {
   return (
     <div className={`ui-switch ${className}`}>
       <label>
@@ -21,16 +23,18 @@ export default function UiSwitch({ ui, onUi, palette, onPalette, className = "" 
           ))}
         </select>
       </label>
-      <label>
-        <span>Colours</span>
-        <select value={palette} onChange={(e) => onPalette(e.target.value)} aria-label="Colour theme">
-          {PALETTES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-      </label>
+      {ui === "terminal" && (
+        <label>
+          <span>Theme</span>
+          <select value={theme} onChange={(e) => onTheme(e.target.value)} aria-label="Background theme">
+            {THEMES.map((t) => (
+              <option key={t} value={t}>
+                {THEME_LABEL[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   );
 }
