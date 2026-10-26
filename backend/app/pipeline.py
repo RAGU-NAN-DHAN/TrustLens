@@ -19,7 +19,7 @@ from app.services.evidence_ranking import rank_evidence
 from app.services.evidence_retrieval import RetrievalError, retrieve_evidence
 from app.services.highlighting import highlight_evidence
 from app.services.semantic_cache import cache_lookup, cache_store, context_hash
-from app.services.verification import VERIFIERS, verify_claim
+from app.services.verification import VERIFIERS, verify_claim, verify_claims_batch
 
 
 log = logging.getLogger("trustlens.pipeline")
@@ -27,10 +27,13 @@ log = logging.getLogger("trustlens.pipeline")
 MAX_CLAIMS = int(os.getenv("TRUSTLENS_MAX_CLAIMS", "6"))
 
 
-def _judge(claim: dict, evidence: list[dict]) -> dict:
+def _judge(claim: dict, evidence: list[dict], batched: dict[str, dict] | None = None) -> dict:
     results, failures = [], []
+    batched = batched or {}
 
     def run(verifier):
+        if verifier in batched:
+            return batched[verifier], None
         try:
             return verify_claim(claim["text"], evidence, verifier, claim_id=claim["claim_id"]), None
         except VerificationError as exc:
@@ -102,22 +105,46 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
     log.warning("analysis %s: %d claims to check", answer_id, len(claims))
     consistency = asyncio.run(m1_bridge.self_consistency(question, [c["text"] for c in claims])) if question else None
 
-    def check(i: int, claim: dict) -> tuple[dict, list[dict], dict | None]:
+    def prepare(claim: dict) -> tuple[list[dict], str, dict | None]:
         try:
             candidates = retrieve_evidence(claim["text"], claim_id=claim["claim_id"])
         except RetrievalError:
             candidates = []
         evidence = highlight_evidence(claim["text"], rank_evidence(claim["text"], candidates))
-        relevance = max((e["combined_score"] for e in evidence), default=None)
-
         ctx = context_hash(evidence)
-        cached = cache_lookup(claim["text"], ctx) if evidence else None
+        return evidence, ctx, cache_lookup(claim["text"], ctx) if evidence else None
+
+    # 1. evidence for every claim, searched at the same time
+    with ThreadPoolExecutor(max_workers=max(1, len(claims))) as pool:
+        prepared = list(pool.map(prepare, claims))
+
+    # 2. each verifier judges ALL uncached claims in one call: 2 calls per answer instead of 2 per claim
+    todo = [(c["claim_id"], c["text"], ev) for c, (ev, _, cached) in zip(claims, prepared) if not cached]
+
+    def batch(verifier: str) -> dict[str, dict]:
+        try:
+            return verify_claims_batch(todo, verifier)
+        except VerificationError as exc:
+            log.warning("batch %s failed, falling back to one call per claim: %s", verifier, exc)
+            return {}
+
+    batched: dict[str, dict[str, dict]] = {}
+    if todo:
+        with ThreadPoolExecutor(max_workers=len(VERIFIERS)) as pool:
+            batched = dict(zip(VERIFIERS, pool.map(batch, VERIFIERS)))
+
+    # 3. disagreement rule and corrections per claim; only verdicts missing from the batch cost extra calls
+    def finish(i: int) -> tuple[dict, list[dict], dict | None]:
+        claim = claims[i]
+        evidence, ctx, cached = prepared[i]
+        relevance = max((e["combined_score"] for e in evidence), default=None)
         if cached:
             decision = {**cached, "claim_id": claim["claim_id"], "cache_hit": True}
             for r in decision["verifier_results"]:
                 r["claim_id"] = claim["claim_id"]
         else:
-            decision = _judge(claim, evidence)
+            got = {v: batched[v][claim["claim_id"]] for v in batched if claim["claim_id"] in batched[v]}
+            decision = _judge(claim, evidence, got)
             if evidence and not decision["needs_human_review"]:
                 cache_store(claim["text"], ctx, decision)
 
@@ -126,22 +153,19 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
         verdicts = {r["verifier"]: r["verdict"] for r in decision["verifier_results"]}
         row = None
         if len(verdicts) == 2:
-            row = (
-                {
-                    "claim_id": claim["claim_id"],
-                    "self_consistency": decision["self_consistency_score"],
-                    "evidence_relevance": relevance,
-                    "agreement": decision["verifier_agreement"],
-                    "verdict_a": verdicts["gemini"],
-                    "verdict_b": verdicts["groq_qwen"],
-                }
-            )
+            row = {
+                "claim_id": claim["claim_id"],
+                "self_consistency": decision["self_consistency_score"],
+                "evidence_relevance": relevance,
+                "agreement": decision["verifier_agreement"],
+                "verdict_a": verdicts["gemini"],
+                "verdict_b": verdicts["groq_qwen"],
+            }
         log.warning("analysis %s: claim %d/%d -> %s", answer_id, i + 1, len(claims), decision["final_verdict"])
         return decision, evidence, row
 
-    # claims don't depend on each other, so check them in parallel instead of one by one
     with ThreadPoolExecutor(max_workers=max(1, len(claims))) as pool:
-        done = list(pool.map(lambda pair: check(*pair), enumerate(claims)))
+        done = list(pool.map(finish, range(len(claims))))
     all_evidence, decisions, rows = [], [], []
     for decision, evidence, row in done:
         decisions.append(decision)

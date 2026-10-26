@@ -36,6 +36,26 @@ EVIDENCE:
 <<EVIDENCE>>"""
 
 
+_BATCH_PROMPT = """You are a strict fact-checking judge.
+For EACH claim below, decide whether it is supported by the evidence passages listed under it.
+
+Rules:
+- Judge every claim ONLY against its own evidence. Do not use your own knowledge, even if you are sure.
+- "supported": the evidence explicitly states the claim, and every detail (names, numbers, dates) matches.
+- "contradicted": the evidence explicitly states something incompatible with the claim.
+- "unverifiable": the evidence neither confirms nor contradicts the claim.
+- If unsure, answer "unverifiable". Never answer "supported" on a partial match.
+
+Reply with JSON only, no other text, one entry per claim:
+{"results": [{"claim_id": "<id>",
+              "verdict": "supported" | "contradicted" | "unverifiable",
+              "confidence": <number from 0 to 1>,
+              "explanation": "<one sentence citing the evidence id>",
+              "evidence_ids": ["<ids of the passages you relied on>"]}]}
+
+<<CLAIMS>>"""
+
+
 def format_evidence(evidence: list[dict]) -> str:
     if not evidence:
         return "(no evidence passages were found)"
@@ -78,6 +98,47 @@ def verify_claim(
     }
 
 
+def verify_claims_batch(items: list[tuple[str, str, list[dict]]], verifier: str) -> dict[str, dict]:
+    """Judge many claims in ONE model call (free tiers allow few calls a minute).
+    items = (claim_id, claim_text, evidence). Returns results by claim_id; claims the
+    model skipped or answered badly are left out so the caller can retry them one by one."""
+    if verifier not in VERIFIERS:
+        raise VerificationError(f"unknown verifier {verifier!r}; expected one of {VERIFIERS}")
+    settings = get_settings()
+    if settings.mock or not items:
+        return {cid: verify_claim(text, ev, verifier, claim_id=cid) for cid, text, ev in items}
+
+    blocks = "\n\n".join(f"CLAIM {cid}:\n{text}\nEVIDENCE for {cid}:\n{format_evidence(ev)}" for cid, text, ev in items)
+    model, raw = _call_real(verifier, _BATCH_PROMPT.replace("<<CLAIMS>>", blocks), settings)
+    try:
+        rows = parse_json_object(raw).get("results")
+    except LLMCallError as exc:
+        raise VerificationError(f"{verifier} verifier: {exc}") from exc
+    if not isinstance(rows, list):
+        raise VerificationError(f"{verifier} verifier returned no 'results' list")
+
+    by_id = {cid: ev for cid, _, ev in items}
+    out: dict[str, dict] = {}
+    for row in rows:
+        cid = str(row.get("claim_id", "")).strip() if isinstance(row, dict) else ""
+        if cid not in by_id or cid in out:
+            continue
+        try:
+            verdict, confidence, explanation, ids = _check_judgement(row, by_id[cid], verifier)
+        except VerificationError:
+            continue
+        out[cid] = {
+            "claim_id": cid,
+            "verifier": verifier,
+            "verdict": verdict,
+            "confidence": confidence,
+            "explanation": explanation,
+            "evidence_ids": ids,
+            "model_version": model,
+        }
+    return out
+
+
 def _call_real(verifier: str, prompt: str, settings) -> tuple[str, str]:
     try:
         if verifier == "gemini":
@@ -105,7 +166,10 @@ def _parse_judgement(raw: str, evidence: list[dict], verifier: str) -> tuple[str
         data = parse_json_object(raw)
     except LLMCallError as exc:
         raise VerificationError(f"{verifier} verifier: {exc}") from exc
+    return _check_judgement(data, evidence, verifier)
 
+
+def _check_judgement(data: dict, evidence: list[dict], verifier: str) -> tuple[str, float, str, list[str]]:
     verdict = str(data.get("verdict", "")).strip().lower()
     if verdict not in VERDICTS:
         raise VerificationError(f"{verifier} verifier returned an invalid verdict {data.get('verdict')!r}")
