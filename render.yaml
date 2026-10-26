@@ -1,5 +1,7 @@
-# Render Blueprint: deploys only the TrustLens website (frontend/dist).
-# The dev-only animation test page in frontend/anim-viewer is never built or published.
+# Render Blueprint for TrustLens.
+#  - trustlens      : the website (static, frontend/dist). The dev-only animation page is never built.
+#  - trustlens-api  : the FastAPI backend running the full M1 + M2 + M3 pipeline.
+# API keys are NOT in this file. Render asks for them when you sync (sync: false).
 services:
   - type: web
     name: trustlens
@@ -9,4 +11,37 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_USE_MOCK
-        value: "true"
+        value: "false"
+      - key: VITE_API_BASE_URL
+        sync: false
+
+  - type: web
+    name: trustlens-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt && pip install ./m1 --no-deps
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: GEMINI_VERIFIER_MODEL
+        value: gemini-3.5-flash
+      - key: GEMINI_FLASH_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GROQ_VERIFIER_MODEL
+        value: qwen/qwen3.8-27b
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: TRUSTLENS_MOCK
+        value: "0"
+      - key: TRUSTLENS_MAX_CLAIMS
+        value: "6"
+      - key: TRUSTLENS_CORS_ORIGINS
+        value: https://trustlens-8vrq.onrender.com,http://localhost:5180

@@ -55,7 +55,17 @@ npm run anim       # http://localhost:5190, one button per animation
 
 ## Deploy on Render
 
-`render.yaml` deploys the website as a static site from `frontend/`. Only `frontend/index.html` is built, so the animation test page is never published. Until M2's backend is online the site runs in demo mode with the saved real-API run.
+`render.yaml` defines two services:
+
+- **trustlens**: the website (static, built from `frontend/`). The animation test page is never published.
+- **trustlens-api**: the backend running the full pipeline.
+
+In Render: Blueprints → the TrustLens blueprint → **Manual sync**. Render asks for the values marked `sync: false`:
+
+- `GEMINI_API_KEY`, `GROQ_API_KEY` (and `BRAVE_API_KEY`, or leave it empty) on **trustlens-api**
+- `VITE_API_BASE_URL` on **trustlens**: the backend's URL, e.g. `https://trustlens-api-xxxx.onrender.com`
+
+Keys live only in Render's environment settings, never in git. On the free plan the backend sleeps when idle (first request takes about a minute to wake) and SQLite history resets on each deploy.
 
 ## API keys
 
