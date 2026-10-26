@@ -20,6 +20,8 @@ const HEAT_BANDS: [number, RGB][] = [
   [1.0, [214, 50, 30]],
 ];
 
+const RADAR_AFTER_MS = 2500;
+
 function heatBand(t: number): RGB {
   for (const [edge, color] of HEAT_BANDS) if (t <= edge) return color;
   return HEAT_BANDS[HEAT_BANDS.length - 1][1];
@@ -51,11 +53,6 @@ function heatRamp(v: number): RGB {
 function onLight([r, g, b]: RGB): RGB {
   if (r > 200 && g > 200 && b > 180) return [38, 28, 24];
   return [Math.round(r * 0.86), Math.round(g * 0.6), Math.round(b * 0.3)];
-}
-
-function hash(a: number, b: number): number {
-  const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
-  return s - Math.floor(s);
 }
 
 function noise(x: number, y: number): number {
@@ -155,40 +152,33 @@ function supportedScene(x: number, y: number, c: SceneCtx, since: number): Hit {
   return [v, c.colors.supported];
 }
 
-function crackedSphere(x: number, y: number, t: number): { v: number; crack: boolean } | null {
-  const crack = 0.07 * Math.sin(y * 9) + 0.04 * Math.sin(y * 23 + 1.3);
-  const gap = 0.1 + 0.05 * Math.sin(t * 2.2);
-  if (Math.abs(x - crack) < gap * 0.5 && Math.abs(y) < 0.95) return { v: 0.35, crack: true };
-  const right = x > crack;
-  // plain shaded halves (no spinning meridians), so it never reads as the idle globe
-  const hx = x + (right ? -gap : gap);
-  const hy = y + (right ? 0.03 : -0.03);
-  const r2 = hx * hx + hy * hy;
-  if (r2 > 1) return null;
-  const z = Math.sqrt(1 - r2);
-  const shade = Math.max(0, hx * LIGHT[0] + hy * LIGHT[1] + z * LIGHT[2]);
-  return { v: Math.max(0.06, shade * 0.85), crack: false };
+function contradictedScene(x: number, y: number, c: SceneCtx): Hit {
+  // warning sign that beats, with rings spreading out
+  const beat = Math.pow(Math.max(0, Math.sin(c.t * 3)), 6);
+  const red = c.colors.contradicted;
+  const d = Math.hypot(x, y);
+  const r = (c.t * 0.6) % 1.3;
+  const ring = Math.exp(-((d - r) ** 2) / 0.003) * (1 - r / 1.3);
+  const inTri = y < 0.55 && y > -0.75 && Math.abs(x) < (y + 0.75) * 0.62;
+  const bang = (Math.abs(x) < 0.07 && y > -0.4 && y < 0.18) || Math.hypot(x, y - 0.36) < 0.08;
+  if (inTri) {
+    if (bang) return [1, [255, 246, 230]];
+    const o = c.colors.unverifiable;
+    return [0.55 + beat * 0.45, [0, 1, 2].map((k) => Math.round(red[k] + (o[k] - red[k]) * beat)) as RGB];
+  }
+  return ring > 0.05 ? [ring, red] : null;
 }
 
-function contradictedScene(x: number, y: number, c: SceneCtx): Hit {
-  const burst = hash(Math.floor(c.t * 6), 7) > 0.72;
-  const tear = burst && hash(c.row, Math.floor(c.t * 30)) > 0.55;
-  const gx = x + (tear ? (hash(c.row, Math.floor(c.t * 30) + 1) - 0.5) * 0.34 : 0);
-  const split = 0.035 + (burst ? 0.075 : 0);
-
-  const main = crackedSphere(gx, y, c.t);
-  if (main) {
-    if (main.crack) return [0.25 + 0.6 * hash(c.row, Math.floor(c.t * 12)), [255, 246, 230]];
-    // occasional bright scan rows during a burst
-    if (tear && hash(c.row, 5) > 0.6) return [Math.min(1, main.v + 0.35), hash(c.row, 9) > 0.5 ? c.colors.supported : [255, 246, 230]];
-    return [main.v, c.colors.contradicted];
-  }
-  // colour-split ghosts on either side of the shape
-  const left = crackedSphere(gx + split, y, c.t);
-  if (left) return [left.v * 0.7, c.colors.unverifiable];
-  const right = crackedSphere(gx - split, y, c.t);
-  if (right) return [right.v * 0.7, c.colors.supported];
-  return null;
+function radarScene(x: number, y: number, c: SceneCtx): Hit {
+  const d = Math.hypot(x, y);
+  if (d > 1.15) return null;
+  const sweep = (c.t * 1.6) % (Math.PI * 2);
+  let a = Math.atan2(y, x);
+  if (a < 0) a += Math.PI * 2;
+  const behind = (sweep - a + Math.PI * 2) % (Math.PI * 2);
+  let v = behind < 1.2 ? (1 - behind / 1.2) * 0.8 : 0;
+  if (Math.abs(d - 0.38) < 0.015 || Math.abs(d - 0.76) < 0.015 || Math.abs(d - 1.12) < 0.02) v = Math.max(v, 0.3);
+  return v > 0.04 ? [v, behind < 0.08 ? [255, 246, 230] : c.colors.unverifiable] : null;
 }
 
 function unverifiableScene(x: number, y: number, c: SceneCtx): Hit {
@@ -219,7 +209,7 @@ interface Props {
 
 export default function LensScene({ mode, palette }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const modeRef = useRef<{ current: SceneMode; previous: SceneMode | null; since: number }>({ current: mode, previous: null, since: 0 });
+  const modeRef = useRef<{ current: SceneMode; previous: SceneMode | null; since: number; previousRadar?: boolean }>({ current: mode, previous: null, since: 0 });
   const colorsRef = useRef<Record<Verdict, RGB> | null>(null);
   const heatRef = useRef(palette === "heat");
   heatRef.current = palette === "heat";
@@ -231,7 +221,7 @@ export default function LensScene({ mode, palette }: Props) {
   useEffect(() => {
     const m = modeRef.current;
     if (m.current !== mode) {
-      modeRef.current = { current: mode, previous: m.current, since: performance.now() };
+      modeRef.current = { current: mode, previous: m.current, since: performance.now(), previousRadar: m.current === "loading" && performance.now() - m.since > RADAR_AFTER_MS };
     }
   }, [mode]);
 
@@ -301,15 +291,16 @@ export default function LensScene({ mode, palette }: Props) {
       }
     }
 
-    function fieldFor(m: SceneMode): ((x: number, y: number, c: SceneCtx, since: number) => Hit) | null {
+    function fieldFor(m: SceneMode | "radar"): ((x: number, y: number, c: SceneCtx, since: number) => Hit) | null {
       if (m === "idle") return idleScene;
+      if (m === "radar") return radarScene;
       if (m === "supported") return supportedScene;
       if (m === "contradicted") return contradictedScene;
       if (m === "unverifiable") return unverifiableScene;
       return null;
     }
 
-    function drawField(m: SceneMode, alpha: number, t: number, since: number) {
+    function drawField(m: SceneMode | "radar", alpha: number, t: number, since: number) {
       const field = fieldFor(m);
       if (!field || alpha <= 0) return;
       const colors = colorsRef.current ?? (colorsRef.current = readPalette());
@@ -354,14 +345,25 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.fillStyle = glow;
       ctx!.fillRect(0, 0, width, height);
 
+      // loading: the flame burns while the answer is written, then flattens into a radar sweep
+      const morph = m.current === "loading" ? Math.min(1, Math.max(0, (since - RADAR_AFTER_MS) / 900)) : 0;
       const fireOn = m.current === "loading" || m.previous === "loading";
       if (fireOn || fire.some((v) => v > 0.05)) {
         if (now - lastFire > 45) {
           stepFire(m.current === "loading");
           lastFire = now;
         }
-        drawFire(m.current === "loading" ? fade : 1);
+        if (morph < 1) {
+          ctx!.save();
+          ctx!.translate(width / 2, height / 2);
+          ctx!.scale(1 + morph * 0.8, 1 - morph * 0.9);
+          ctx!.translate(-width / 2, -height / 2);
+          drawFire((m.current === "loading" ? fade : 1) * (1 - morph));
+          ctx!.restore();
+        }
       }
+      if (morph > 0) drawField("radar", morph, t, since);
+      else if (m.previous === "loading" && fade < 1 && m.previousRadar) drawField("radar", 1 - fade, t, since);
       if (m.previous && m.previous !== "loading") drawField(m.previous, 1 - fade, t, since);
       if (m.current !== "loading") drawField(m.current, fade, t, since);
 
