@@ -2,6 +2,7 @@
 M2 (claims, evidence, ranking, cache, storage) and M3 (verifiers, disagreement, corrections, highlighting)."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import os
 import uuid
@@ -28,11 +29,20 @@ MAX_CLAIMS = int(os.getenv("TRUSTLENS_MAX_CLAIMS", "6"))
 
 def _judge(claim: dict, evidence: list[dict]) -> dict:
     results, failures = [], []
-    for verifier in VERIFIERS:
+
+    def run(verifier):
         try:
-            results.append(verify_claim(claim["text"], evidence, verifier, claim_id=claim["claim_id"]))
+            return verify_claim(claim["text"], evidence, verifier, claim_id=claim["claim_id"]), None
         except VerificationError as exc:
-            failures.append(str(exc))
+            return None, str(exc)
+
+    # both verifiers are independent, so ask them at the same time
+    with ThreadPoolExecutor(max_workers=len(VERIFIERS)) as pool:
+        for result, failure in pool.map(run, VERIFIERS):
+            if failure:
+                failures.append(failure)
+            else:
+                results.append(result)
     if failures:
         # a verifier failed: never guess, send the claim to human review
         outcome = {"final_verdict": "unverifiable", "verifier_agreement": False, "needs_human_review": True}
@@ -92,8 +102,7 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
     log.warning("analysis %s: %d claims to check", answer_id, len(claims))
     consistency = asyncio.run(m1_bridge.self_consistency(question, [c["text"] for c in claims])) if question else None
 
-    all_evidence, decisions, rows = [], [], []
-    for i, claim in enumerate(claims):
+    def check(i: int, claim: dict) -> tuple[dict, list[dict], dict | None]:
         try:
             candidates = retrieve_evidence(claim["text"], claim_id=claim["claim_id"])
         except RetrievalError:
@@ -115,8 +124,9 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
         decision["evidence_relevance_score"] = relevance
         decision["self_consistency_score"] = consistency[i] if consistency else None
         verdicts = {r["verifier"]: r["verdict"] for r in decision["verifier_results"]}
+        row = None
         if len(verdicts) == 2:
-            rows.append(
+            row = (
                 {
                     "claim_id": claim["claim_id"],
                     "self_consistency": decision["self_consistency_score"],
@@ -126,9 +136,18 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
                     "verdict_b": verdicts["groq_qwen"],
                 }
             )
+        log.warning("analysis %s: claim %d/%d -> %s", answer_id, i + 1, len(claims), decision["final_verdict"])
+        return decision, evidence, row
+
+    # claims don't depend on each other, so check them in parallel instead of one by one
+    with ThreadPoolExecutor(max_workers=max(1, len(claims))) as pool:
+        done = list(pool.map(lambda pair: check(*pair), enumerate(claims)))
+    all_evidence, decisions, rows = [], [], []
+    for decision, evidence, row in done:
         decisions.append(decision)
         all_evidence.extend(evidence)
-        log.warning("analysis %s: claim %d/%d -> %s", answer_id, i + 1, len(claims), decision["final_verdict"])
+        if row:
+            rows.append(row)
 
     result = {
         "answer_id": answer_id,
