@@ -9,8 +9,8 @@ Full plan and work split: `TrustLens_Context.md` (in the team chat). Contract ch
 | Part | Owner | Status |
 |---|---|---|
 | Verifiers (Gemini + Groq), disagreement rule, correction + checker, evidence highlighting, UI | M3 | Built and tested with real Gemini 3.5 Flash + Groq qwen3.8-27b |
-| Generation, self-consistency, embeddings, trust model, evaluation | M1 | Built separately (trustlens-m1, 70 tests), not merged yet |
-| Claim splitting, retrieval, ranking, cache, server, database | M2 | Not started (hand-written demo claims and evidence in use) |
+| Generation, self-consistency, embeddings, trust model, evaluation | M1 | In `m1/` (92 tests). Trust model is trained on simulated signals until real pipeline runs replace them |
+| Claim splitting, retrieval, ranking, cache, server, database | M2 | Built: FastAPI server, Gemini claim splitting, Wikipedia (+ optional Brave) retrieval, BM25 + embedding ranking, semantic cache, SQLite |
 
 ## Run it
 
@@ -24,6 +24,16 @@ python -m venv .venv
 .venv/Scripts/python scripts/demo_m3.py          # mock verifiers, no keys
 .venv/Scripts/python scripts/demo_m3.py --real   # real Gemini + Groq (needs backend/.env)
 ```
+
+Run the API server (all three parts wired together):
+
+```bash
+cd backend
+.venv/Scripts/python -m pip install -e ../m1 --no-deps
+.venv/Scripts/python -m uvicorn app.main:app --port 8000
+```
+
+`frontend/.env.development.local` with `VITE_USE_MOCK=false` points the dev site at it. Free API tiers are slow, so each answer is capped at `TRUSTLENS_MAX_CLAIMS` (default 6) claims.
 
 `demo_m3.py` writes `frontend/src/mocks/sampleAnalysis.json`, which the UI shows in demo mode.
 

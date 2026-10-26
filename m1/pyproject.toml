@@ -1,0 +1,27 @@
+[project]
+name = "trustlens-m1"
+version = "0.1.0"
+description = "TrustLens M1: Groq-based generation, self-consistency, shared embeddings, and logistic-regression trust scoring."
+requires-python = ">=3.10"
+dependencies = [
+    "groq>=0.11.0",
+    "sentence-transformers>=3.0.0",
+    "numpy>=1.26.0",
+    "pandas>=2.1.0",
+    "scikit-learn>=1.4.0",
+    "joblib>=1.3.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

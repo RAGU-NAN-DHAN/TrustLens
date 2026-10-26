@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets
+.env
+
+# Trained models / local artifacts (never commit a real trained model blindly;
+# share via your team's agreed artifact storage instead)
+*.joblib
+
+# Generated reports (reproducible from source data + commands in
+# M1_INTEGRATION_CONTRACT.md; do not hand-edit or commit stale copies)
+reports/*.json
+reports/*.csv
+
+# Real labelled data lives wherever the team agrees (not necessarily this
+# repo); don't accidentally commit a working copy here.
+data/*.csv
+!data/.gitkeep
