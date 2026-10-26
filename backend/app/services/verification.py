@@ -82,7 +82,14 @@ def _call_real(verifier: str, prompt: str, settings) -> tuple[str, str]:
     try:
         if verifier == "gemini":
             model = settings.gemini_verifier_model
-            return model, call_gemini(prompt, model, settings.gemini_api_key, settings.http_timeout)
+            try:
+                return model, call_gemini(prompt, model, settings.gemini_api_key, settings.http_timeout)
+            except LLMCallError:
+                # main Gemini model busy or out of free quota: use the lighter Gemini model, still an independent verifier
+                if settings.gemini_flash_model in ("", model):
+                    raise
+                model = settings.gemini_flash_model
+                return model, call_gemini(prompt, model, settings.gemini_api_key, settings.http_timeout)
         model = settings.groq_verifier_model
         if not model:
             raise VerificationError("GROQ_VERIFIER_MODEL is not set; pick a current non-Llama model on console.groq.com")

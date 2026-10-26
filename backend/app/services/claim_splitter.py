@@ -55,15 +55,16 @@ def split_claims(answer_text: str, answer_id: str = "", mock: bool | None = None
         prompt = _PROMPT.replace("<<ANSWER>>", answer)
         try:
             data = parse_json_object(call_gemini(prompt, settings.gemini_flash_model, settings.gemini_api_key, settings.http_timeout))
-        except LLMCallError as exc:
-            raise ClaimSplitError(f"claim splitter: {exc}") from exc
-        items = data.get("claims")
-        if not isinstance(items, list):
-            raise ClaimSplitError("claim splitter returned no 'claims' list")
+            items = data.get("claims")
+        except LLMCallError:
+            items = None
         pairs = []
-        for item in items:
+        for item in items if isinstance(items, list) else []:
             if isinstance(item, dict) and str(item.get("text", "")).strip():
                 pairs.append((str(item["text"]).strip(), str(item.get("sentence", "")).strip()))
+        if not pairs:
+            # Gemini busy or unusable reply: fall back to one claim per factual sentence rather than failing the check
+            pairs = [(s[2], s[2]) for s in sentences if not _OPINION.search(s[2])]
 
     claims = []
     for i, (text, sentence) in enumerate(pairs, start=1):

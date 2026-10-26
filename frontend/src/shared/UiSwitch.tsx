@@ -13,16 +13,18 @@ interface Props {
 export default function UiSwitch({ ui, onUi, theme, onTheme, className = "" }: Props) {
   return (
     <div className={`ui-switch ${className}`}>
-      <label>
-        <span>Layout</span>
-        <select value={ui} onChange={(e) => onUi(e.target.value as UiName)} aria-label="Layout">
-          {UIS.map((u) => (
-            <option key={u} value={u}>
-              {u}
-            </option>
-          ))}
-        </select>
-      </label>
+      {UIS.length > 1 && (
+        <label>
+          <span>Layout</span>
+          <select value={ui} onChange={(e) => onUi(e.target.value as UiName)} aria-label="Layout">
+            {UIS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {ui === "terminal" && (
         <label>
           <span>Theme</span>

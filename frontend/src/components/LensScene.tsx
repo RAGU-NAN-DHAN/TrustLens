@@ -10,22 +10,8 @@ const RAMP = " .:-=+*%#@";
 const CELL_W = 9;
 const CELL_H = 14;
 const FADE_MS = 600;
-const IDLE_GREY: RGB = [150, 160, 175];
-
-const HEAT_BANDS: [number, RGB][] = [
-  [0.12, [255, 236, 140]],
-  [0.26, [246, 196, 92]],
-  [0.46, [236, 144, 60]],
-  [0.84, [222, 98, 42]],
-  [1.0, [214, 50, 30]],
-];
 
 const RADAR_AFTER_MS = 2500;
-
-function heatBand(t: number): RGB {
-  for (const [edge, color] of HEAT_BANDS) if (t <= edge) return color;
-  return HEAT_BANDS[HEAT_BANDS.length - 1][1];
-}
 
 function heatRamp(v: number): RGB {
   // 0 = dark ember, 1 = white-yellow core
@@ -52,7 +38,9 @@ function heatRamp(v: number): RGB {
 // light page: keep the warm hue saturated (cut blue, then green) instead of just darkening to brown
 function onLight([r, g, b]: RGB): RGB {
   if (r > 200 && g > 200 && b > 180) return [38, 28, 24];
-  return [Math.round(r * 0.86), Math.round(g * 0.6), Math.round(b * 0.3)];
+  // yellows become a deep gold, oranges and reds keep their hue but darken and saturate
+  if (g > 170) return [184, 128, 0];
+  return [Math.min(255, Math.round(r * 0.95)), Math.round(g * 0.62), Math.round(b * 0.15)];
 }
 
 function noise(x: number, y: number): number {
@@ -77,46 +65,11 @@ function readPalette(): Record<Verdict, RGB> {
   };
 }
 
-const LIGHT = (() => {
-  const l = [-0.45, -0.55, 0.7];
-  const n = Math.hypot(l[0], l[1], l[2]);
-  return [l[0] / n, l[1] / n, l[2] / n];
-})();
-
-// shaded, spinning sphere; returns brightness plus latitude/longitude of the surface point
-function sphere(x: number, y: number, t: number, spin: number): { v: number; lat: number; lon: number } | null {
-  const r2 = x * x + y * y;
-  if (r2 > 1) return null;
-  const z = Math.sqrt(1 - r2);
-  const shade = Math.max(0, x * LIGHT[0] + y * LIGHT[1] + z * LIGHT[2]);
-  const tilt = 0.35;
-  const ty = y * Math.cos(tilt) - z * Math.sin(tilt);
-  const tz = y * Math.sin(tilt) + z * Math.cos(tilt);
-  const a = t * spin;
-  const rx = x * Math.cos(a) - tz * Math.sin(a);
-  const rz = x * Math.sin(a) + tz * Math.cos(a);
-  const lon = (Math.atan2(rx, rz) / (2 * Math.PI) + 1) % 1;
-  const lat = Math.asin(Math.max(-1, Math.min(1, -ty)));
-  const meridian = 0.7 + 0.3 * Math.cos(lon * 2 * Math.PI * 9);
-  return { v: Math.max(0.05, shade * meridian), lat, lon };
-}
-
 interface SceneCtx {
   t: number;
   row: number;
   colors: Record<Verdict, RGB>;
   heat: boolean;
-}
-
-function idleScene(x: number, y: number, c: SceneCtx): Hit {
-  // breathe and squash slightly so the shape keeps changing within its bounds
-  const breathe = 1 + 0.05 * Math.sin(c.t * 1.1);
-  const squash = 1 + 0.14 * Math.sin(c.t * 0.55);
-  const s = sphere(x / breathe, (y * squash) / breathe, c.t, 0.35);
-  if (!s) return null;
-  const color = c.heat ? heatBand(0.5 - s.lat / Math.PI) : IDLE_GREY;
-  // keep the red lower band visible even where the globe is in shadow
-  return [c.heat ? Math.max(s.v, 0.2) : s.v, color];
 }
 
 function supportedScene(x: number, y: number, c: SceneCtx, since: number): Hit {
@@ -292,7 +245,6 @@ export default function LensScene({ mode, palette }: Props) {
     }
 
     function fieldFor(m: SceneMode | "radar"): ((x: number, y: number, c: SceneCtx, since: number) => Hit) | null {
-      if (m === "idle") return idleScene;
       if (m === "radar") return radarScene;
       if (m === "supported") return supportedScene;
       if (m === "contradicted") return contradictedScene;
@@ -331,6 +283,84 @@ export default function LensScene({ mode, palette }: Props) {
       }
     }
 
+    // idle: a pair of glowing eyes that follow the cursor, blink, and glance around when left alone
+    const eyes = { gx: 0, gy: 0, nextBlink: performance.now() + 2500, blinkAt: -1, double: false, glance: { x: 0, y: 0, until: 0 } };
+    const pointer = { x: 0, y: 0, at: -1e9 };
+    function onPointer(e: PointerEvent) {
+      const rect = canvas!.getBoundingClientRect();
+      pointer.x = e.clientX - rect.left;
+      pointer.y = e.clientY - rect.top;
+      pointer.at = performance.now();
+    }
+    window.addEventListener("pointermove", onPointer);
+
+    function drawEyes(alpha: number, now: number) {
+      if (alpha <= 0) return;
+      const lightPage = document.documentElement.dataset.theme === "light";
+      const [r, g, b] = lightPage ? onLight([246, 180, 80]) : ([246, 180, 80] as RGB);
+      const cx = width / 2;
+      const cy = height / 2;
+      const unit = Math.min(width, height) / 9;
+      const active = now - pointer.at < 4000;
+      let tx: number;
+      let ty: number;
+      if (active) {
+        const dx = pointer.x - cx;
+        const dy = pointer.y - cy;
+        const d = Math.hypot(dx, dy) || 1;
+        const reach = Math.min(1, d / (unit * 4));
+        tx = (dx / d) * unit * 0.45 * reach;
+        ty = (dy / d) * unit * 0.35 * reach;
+      } else {
+        if (now > eyes.glance.until) eyes.glance = { x: (Math.random() - 0.5) * unit * 0.7, y: (Math.random() - 0.5) * unit * 0.3, until: now + 1000 + Math.random() * 2000 };
+        tx = eyes.glance.x;
+        ty = eyes.glance.y;
+      }
+      eyes.gx += (tx - eyes.gx) * 0.15;
+      eyes.gy += (ty - eyes.gy) * 0.15;
+
+      let blink = 0;
+      if (eyes.blinkAt < 0 && now > eyes.nextBlink) {
+        eyes.blinkAt = now;
+        eyes.double = Math.random() < 0.25;
+      }
+      if (eyes.blinkAt >= 0 && now >= eyes.blinkAt) {
+        const p = (now - eyes.blinkAt) / 160;
+        if (p < 1) blink = Math.sin(p * Math.PI);
+        else if (eyes.double) {
+          eyes.double = false;
+          eyes.blinkAt = now + 70;
+        } else {
+          eyes.blinkAt = -1;
+          eyes.nextBlink = now + 2500 + Math.random() * 3500;
+        }
+      }
+
+      const ew = unit * 0.75;
+      const eh = unit * 1.1 * (1 - blink) + 1.5;
+      const breathe = Math.sin(now / 900) * unit * 0.04;
+      ctx!.save();
+      ctx!.globalAlpha = alpha;
+      for (const side of [-1, 1]) {
+        const ex = cx + side * unit * 1.55 + eyes.gx;
+        const ey = cy + eyes.gy * 0.8 + breathe;
+        ctx!.shadowColor = `rgba(${r},${g},${b},0.9)`;
+        ctx!.shadowBlur = lightPage ? 6 : unit * 0.5;
+        ctx!.fillStyle = `rgb(${r},${g},${b})`;
+        ctx!.beginPath();
+        ctx!.ellipse(ex, ey, ew, eh, 0, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.shadowBlur = 0;
+        if (eh > ew * 0.4) {
+          ctx!.fillStyle = lightPage ? "rgba(255,255,255,0.7)" : "rgba(255,248,230,0.85)";
+          ctx!.beginPath();
+          ctx!.ellipse(ex - ew * 0.3 + eyes.gx * 0.25, ey - eh * 0.35 + eyes.gy * 0.2, ew * 0.22, eh * 0.16, 0, 0, Math.PI * 2);
+          ctx!.fill();
+        }
+      }
+      ctx!.restore();
+    }
+
     function draw(now: number) {
       const t = now / 1000;
       const m = modeRef.current;
@@ -364,6 +394,8 @@ export default function LensScene({ mode, palette }: Props) {
       }
       if (morph > 0) drawField("radar", morph, t, since);
       else if (m.previous === "loading" && fade < 1 && m.previousRadar) drawField("radar", 1 - fade, t, since);
+      if (m.current === "idle") drawEyes(fade, now);
+      else if (m.previous === "idle") drawEyes(1 - fade, now);
       if (m.previous && m.previous !== "loading") drawField(m.previous, 1 - fade, t, since);
       if (m.current !== "loading") drawField(m.current, fade, t, since);
 
@@ -377,6 +409,7 @@ export default function LensScene({ mode, palette }: Props) {
     return () => {
       cancelAnimationFrame(frame);
       observer?.disconnect();
+      window.removeEventListener("pointermove", onPointer);
     };
   }, []);
 

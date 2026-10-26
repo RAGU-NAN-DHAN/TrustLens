@@ -9,13 +9,13 @@ import httpx
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 RATE_LIMIT_RETRIES = 3
-RATE_LIMIT_WAIT = 20.0  # free tiers allow only a few requests per minute
+RATE_LIMIT_WAIT = 6.0  # free tiers allow only a few requests per minute; keep waits short so a check stays fast
 
 
 def _post(url: str, headers: dict, body: dict, timeout: float) -> httpx.Response:
     for attempt in range(RATE_LIMIT_RETRIES + 1):
         resp = httpx.post(url, headers=headers, json=body, timeout=timeout)
-        if resp.status_code != 429 or attempt == RATE_LIMIT_RETRIES:
+        if resp.status_code not in (429, 500, 502, 503, 504) or attempt == RATE_LIMIT_RETRIES:
             return resp
         time.sleep(RATE_LIMIT_WAIT * (attempt + 1))
     return resp

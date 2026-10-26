@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 export const THEMES = ["dark", "light", "graphite"] as const;
 export const PALETTE = "heat";
-export const UIS = ["terminal", "console", "analytics"] as const;
+export const UIS = ["terminal"] as const;
 export type UiName = (typeof UIS)[number];
 
 function load<T extends string>(key: string, allowed: readonly T[], fallback: T): T {

@@ -42,7 +42,10 @@
   --text: #17171a;
   --muted: #66656b;
   --dim: #a7a49c;
-  --sup-rgb: 196, 146, 12;
+  /* deeper, saturated heat colours so they stay distinct on a pale page */
+  --sup-rgb: 184, 128, 0;
+  --con-rgb: 178, 24, 16;
+  --unv-rgb: 214, 84, 6;
   --dot: #d93a24;
   color-scheme: light;
 }
