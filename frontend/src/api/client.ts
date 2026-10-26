@@ -114,8 +114,13 @@ export function createClient({ baseUrl, useMock, fetchImpl, sample: chosen }: Cl
   };
 }
 
+const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
+// a deployed build with no backend address falls back to demo mode instead of calling localhost
+const liveWanted = (import.meta.env.VITE_USE_MOCK ?? "true") === "false";
+const canGoLive = apiBase !== "" || import.meta.env.DEV;
+
 export const client = createClient({
-  baseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000",
-  useMock: (import.meta.env.VITE_USE_MOCK ?? "true") !== "false",
+  baseUrl: apiBase || "http://localhost:8000",
+  useMock: !(liveWanted && canGoLive),
   sample: isLiveRun(liveSample) ? liveSample : mockSample,
 });
