@@ -127,9 +127,10 @@ def _wiki_title(topic: str) -> str:
 def _background(question: str) -> list[dict]:
     """Wikipedia notes for the question. For 'latest/current' questions also search the
     year-specific pages (e.g. '2025 Ballon d'Or'), which name the most recent result."""
-    queries = [question]
+    # also search Wikipedia's own title for the topic: "who won the fifa 2026" -> "2026 FIFA World Cup"
+    topic = _wiki_title(re.sub(r"\s+", " ", _FILLER.sub(" ", question)).strip(" ?."))
+    queries = [question] + ([topic] if topic and topic.lower() not in question.lower() else [])
     if _RECENT.search(question):
-        topic = _wiki_title(re.sub(r"\s+", " ", _FILLER.sub(" ", question)).strip(" ?."))
         year = datetime.now(timezone.utc).year
         queries = [f"{year} {topic}", f"{year - 1} {topic}", question]
     def search(q: str) -> list[dict]:
@@ -171,8 +172,9 @@ def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
             note(f"Gemini Google Search unavailable ({exc}); answered from Wikipedia notes instead.")
     background = "\n".join(f"- {n['passage']}" for n in notes) or "- (no background notes found)"
     prompt = (f"Today is {today}.\n{_RULES}\nThe background notes are current; your memory may be out of date. "
-              "If the notes name the answer (a winner, a result, a date), use exactly what they say. "
-              "If they don't, don't guess a name or score: say what the notes do establish.\n\n"
+              "When the notes name the answer (a winner, a result, a date), use exactly what they say. "
+              "Answer the question directly as a normal assistant: never mention notes, sources, background "
+              "or 'provided information'.\n\n"
               f"Background notes:\n{background}\n\nQuestion: {question}")
     answer, model = asyncio.run(m1_bridge.generate(prompt))
     return answer, f"{model} (M1 generator) + Wikipedia notes"

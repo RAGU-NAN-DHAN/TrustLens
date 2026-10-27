@@ -9,18 +9,6 @@ import LensScene, { type SceneMode } from "./LensScene";
 import Overview from "./Overview";
 import { percent } from "./verdict";
 
-const STOP = new Set(
-  "the a an and or of to in on at for by with about from what which who whom whose when where why how is are was were be been did does do has have had tell me please give latest current recent result results between into than that this these those it its their there".split(" "),
-);
-
-// the meaningful words of the question, for the radar
-function topicWords(q: string): string[] {
-  const seen = new Set<string>();
-  return (q.match(/[\p{L}\p{N}'’-]+/gu) ?? [])
-    .filter((w) => w.length > 2 && !STOP.has(w.toLowerCase()))
-    .filter((w) => !seen.has(w.toLowerCase()) && seen.add(w.toLowerCase()));
-}
-
 function outcomeOf(result: AnalysisResult): SceneMode {
   const verdicts = result.decisions.map((d) => d.final_verdict);
   // no claims checked at all is not "verified"
@@ -141,7 +129,7 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
           <span className="mark bc" />
           <span className="red-dot rd-1" />
           <span className="red-dot rd-2" />
-          <LensScene mode={scene} palette="heat" score={score} words={topicWords(question)} />
+          <LensScene mode={scene} palette="heat" score={score} />
           <div className="lens-label">
             <span className="br">[</span> trust <b className={level}>{score === undefined ? "—" : percent(score)}</b>{" "}
             <span className="br">]</span>
