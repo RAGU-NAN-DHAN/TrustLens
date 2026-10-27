@@ -53,7 +53,8 @@ def _wikipedia(query: str, pages: int, timeout: float) -> list[dict]:
     for pid in ids:
         page = pages_by_id.get(pid, {})
         for passage in _chunk(page.get("extract", "")):
-            out.append({"source": "wikipedia", "url": page.get("fullurl", f"https://en.wikipedia.org/?curid={pid}"), "passage": passage})
+            # label each passage with its page: "the franchise" means nothing once cut out of "Chennai Super Kings"
+            out.append({"source": "wikipedia", "url": page.get("fullurl", f"https://en.wikipedia.org/?curid={pid}"), "passage": f"[{page.get('title', 'Wikipedia')}] {passage}"})
     # read the full text of the top two pages: search order varies, and the answer is often in the body
     for pid in ids[:2]:
         out.extend(_body_passages(query, pid, pages_by_id.get(pid, {}), timeout))
@@ -83,7 +84,7 @@ def _body_passages(query: str, pid: str, page: dict, timeout: float, keep: int =
     chunks = _chunk(text)
     scored = sorted(((len(want & set(tokens(c))), i, c) for i, c in enumerate(chunks)), reverse=True)
     url = page.get("fullurl", f"https://en.wikipedia.org/?curid={pid}")
-    return [{"source": "wikipedia", "url": url, "passage": c} for n, _, c in scored[:keep] if n > 0]
+    return [{"source": "wikipedia", "url": url, "passage": f"[{page.get('title', 'Wikipedia')}] {c}"} for n, _, c in scored[:keep] if n > 0]
 
 
 def _brave(query: str, key: str, timeout: float) -> list[dict]:

@@ -205,6 +205,7 @@ def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
     prompt = (f"Today is {today}.\n{rules}\nThe background notes are current; your memory may be out of date. "
               "When the notes name the answer (a winner, a result, a date), use exactly what they say. "
               "If the notes show a change over time (someone replaced, took over, was appointed, left), the most recent one is the answer. "
+              "Each note starts with [the page it comes from]; 'the team' or 'the franchise' in a note means that page's subject, so never move a fact from one team, person or event to another. "
               "Answer the question directly as a normal assistant: never mention notes, sources, background "
               "or 'provided information'.\n\n"
               f"Background notes:\n{background}\n\nQuestion: {question}")
