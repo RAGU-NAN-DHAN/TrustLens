@@ -56,12 +56,33 @@ export function createClient({ baseUrl, useMock, fetchImpl, sample: chosen }: Cl
   const doFetch = fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   const root = baseUrl.replace(/\/+$/, "");
 
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    let res: Response;
+  async function attempt(path: string, init?: RequestInit): Promise<Response> {
+    // a check should never hang the page: give up after 90 s
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 90_000) : null;
     try {
-      res = await doFetch(`${root}${path}`, init);
-    } catch {
-      throw new ApiError("NETWORK_ERROR", `Could not reach the TrustLens server at ${root}.`, 0);
+      return await doFetch(`${root}${path}`, { ...init, signal: ctrl?.signal });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+    let res: Response | null = null;
+    // the free server sleeps and restarts on deploys: wait a moment and try once more before giving up
+    for (let tryNo = 0; tryNo < 2 && !res; tryNo++) {
+      try {
+        res = await attempt(path, init);
+        if (res.status === 502 || res.status === 503) {
+          res = null;
+          throw new Error("server restarting");
+        }
+      } catch {
+        if (tryNo === 0) await delay(4000);
+      }
+    }
+    if (!res) {
+      throw new ApiError("NETWORK_ERROR", "The TrustLens server is waking up. Please press Check again in a few seconds.", 0);
     }
     if (!res.ok) {
       let body: { error_code?: string; message?: string } | undefined;
@@ -118,6 +139,12 @@ const apiBase = (import.meta.env.VITE_API_BASE_URL ?? "").trim();
 // a deployed build with no backend address falls back to demo mode instead of calling localhost
 const liveWanted = (import.meta.env.VITE_USE_MOCK ?? "true") === "false";
 const canGoLive = apiBase !== "" || import.meta.env.DEV;
+
+// wake the free server as soon as the page opens, so the first check doesn't wait for a cold start
+export function warmUp() {
+  if (client.isMock) return;
+  fetch(`${(apiBase || "http://localhost:8000").replace(/\/+$/, "")}/health`).catch(() => undefined);
+}
 
 export const client = createClient({
   baseUrl: apiBase || "http://localhost:8000",

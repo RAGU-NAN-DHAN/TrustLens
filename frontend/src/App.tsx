@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ApiError, client } from "./api/client";
+import { useEffect, useState } from "react";
+import { ApiError, client, warmUp } from "./api/client";
 import Dashboard from "./components/Dashboard";
 import HistoryList from "./components/HistoryList";
 import type { UiName } from "./prefs";
@@ -19,6 +19,7 @@ export default function App({ ui, onUi, theme, onTheme }: Props) {
   const [view, setView] = useState<View>("check");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useEffect(warmUp, []);
   async function openFromHistory(answerId: string) {
     setError(null);
     try {

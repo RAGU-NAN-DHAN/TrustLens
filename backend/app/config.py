@@ -32,5 +32,5 @@ def get_settings() -> Settings:
         gemini_flash_model=os.getenv("GEMINI_FLASH_MODEL", "gemini-3.5-flash-lite").strip(),
         groq_verifier_model=os.getenv("GROQ_VERIFIER_MODEL", "").strip(),
         mock=_flag("TRUSTLENS_MOCK", "1"),
-        http_timeout=float(os.getenv("TRUSTLENS_HTTP_TIMEOUT", "60")),
+        http_timeout=float(os.getenv("TRUSTLENS_HTTP_TIMEOUT", "25")),
     )

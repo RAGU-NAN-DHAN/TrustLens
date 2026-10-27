@@ -13,7 +13,7 @@ describe("client", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.error_code).toBe("ANALYSIS_NOT_FOUND");
     expect(err.status).toBe(404);
-    expect(fetchImpl).toHaveBeenCalledWith("http://api.test/api/v1/analysis/a_9", undefined);
+    expect(fetchImpl).toHaveBeenCalledWith("http://api.test/api/v1/analysis/a_9", expect.objectContaining({ signal: expect.anything() }));
   });
 
   it("posts the question to /api/v1/analyze", async () => {

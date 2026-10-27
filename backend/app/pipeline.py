@@ -104,8 +104,8 @@ def _trust(answer_id: str, decisions: list[dict], rows: list[dict]) -> dict:
     }
 
 
-_RECENT = re.compile(r"\b(latest|current|currently|recent|recently|newest|now|today|this year|last year|present)\b", re.I)
-_FILLER = re.compile(r"\b(tell me about|who is|who was|who won|what is|what was|the|latest|current|currently|recent|recently|newest|now|today|winner|holder)\b", re.I)
+_RECENT = re.compile(r"\b(la\w{0,3}st|current|currently|recent|recently|newest|now|today|this year|present)\b", re.I)
+_FILLER = re.compile(r"\b(tell me about|who is|who was|who won|what is|what was|what were|result of|results of|score of|the|la\w{0,3}st|current|currently|recent|recently|newest|now|today|winner|holder)\b", re.I)
 _RULES = (
     "Answer the question in 3 to 5 short, plain factual sentences (under 90 words).\n"
     "Rules: answer directly; no greetings, apologies, disclaimers, advice, lists or markdown; "
