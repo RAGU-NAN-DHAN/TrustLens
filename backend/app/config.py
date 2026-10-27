@@ -25,7 +25,8 @@ class Settings:
 def get_settings() -> Settings:
     # read at call time so tests and scripts can change the environment
     return Settings(
-        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+        # GEMINI_API_KEYS="k1,k2,..." gives backup keys, tried in order when one hits its limit
+        gemini_api_key=",".join(k for k in [os.getenv("GEMINI_API_KEY", "").strip()] + os.getenv("GEMINI_API_KEYS", "").split(",") if k.strip()),
         groq_api_key=os.getenv("GROQ_API_KEY", "").strip(),
         gemini_verifier_model=os.getenv("GEMINI_VERIFIER_MODEL", "gemini-3.5-flash").strip(),
         gemini_flash_model=os.getenv("GEMINI_FLASH_MODEL", "gemini-3.5-flash-lite").strip(),

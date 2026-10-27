@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 import time
 
 import httpx
@@ -25,15 +26,48 @@ class LLMCallError(Exception):
     pass
 
 
-def call_gemini(prompt: str, model: str, api_key: str, timeout: float) -> str:
-    if not api_key:
+_events: list[str] = []
+_events_lock = threading.Lock()
+
+
+def note(event: str) -> None:
+    """Record something worth showing on the result (e.g. a key switch)."""
+    with _events_lock:
+        if event not in _events:
+            _events.append(event)
+
+
+def take_notes() -> list[str]:
+    with _events_lock:
+        out = list(_events)
+        _events.clear()
+    return out
+
+
+def _post_failover(url: str, keys: list[str], body: dict, timeout: float) -> httpx.Response:
+    """Try each key once; a key that is out of quota or busy hands over to the next immediately.
+    Only the last key gets the slower retry loop."""
+    for i, key in enumerate(keys[:-1]):
+        resp = httpx.post(url, headers={"x-goog-api-key": key}, json=body, timeout=timeout)
+        if resp.status_code not in (429, 500, 502, 503, 504):
+            return resp
+        note(f"Gemini key {i + 1} hit its limit (HTTP {resp.status_code}); switched to backup key {i + 2}.")
+    return _post(url, {"x-goog-api-key": keys[-1]}, body, timeout)
+
+
+def call_gemini(prompt: str, model: str, api_key: str, timeout: float, search: bool = False) -> str:
+    """api_key may be a comma-separated list of keys. search=True lets Gemini use Google Search
+    (Gemini then answers in plain text, so JSON mode is off)."""
+    keys = [k.strip() for k in api_key.split(",") if k.strip()]
+    if not keys:
         raise LLMCallError("GEMINI_API_KEY is not set")
-    body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
-    }
+    body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0}}
+    if search:
+        body["tools"] = [{"google_search": {}}]
+    else:
+        body["generationConfig"]["responseMimeType"] = "application/json"
     try:
-        resp = _post(GEMINI_URL.format(model=model), {"x-goog-api-key": api_key}, body, timeout)
+        resp = _post_failover(GEMINI_URL.format(model=model), keys, body, timeout)
         resp.raise_for_status()
         parts = resp.json()["candidates"][0]["content"]["parts"]
     except httpx.HTTPStatusError as exc:

@@ -103,6 +103,9 @@ class AnalysisResult(BaseModel):
     decisions: list[ClaimDecision]
     trust_score: TrustScore
     created_at: str | None = None
+    # who wrote the answer and anything that happened on the way (key switches, fallbacks)
+    answer_source: str | None = None
+    notes: list[str] = []
 
 
 class HistoryItem(BaseModel):

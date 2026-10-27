@@ -78,6 +78,8 @@ export interface AnalysisResult {
   decisions: ClaimDecision[];
   trust_score: TrustScore;
   created_at: string | null;
+  answer_source?: string | null;
+  notes?: string[];
 }
 
 export interface HistoryItem {

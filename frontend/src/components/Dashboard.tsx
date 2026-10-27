@@ -131,6 +131,10 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
               {result.question && <span className="muted">Q: {result.question}</span>}
             </div>
             <AnswerView analysis={result} />
+            {result.answer_source && <p className="muted small disclaimer">Answer by {result.answer_source}</p>}
+            {result.notes?.map((n) => (
+              <p key={n} className="muted small disclaimer">! {n}</p>
+            ))}
             <p className="muted small disclaimer">{result.trust_score.disclaimer}</p>
           </div>
 

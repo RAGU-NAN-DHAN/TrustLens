@@ -2,13 +2,18 @@
 M2 (claims, evidence, ranking, cache, storage) and M3 (verifiers, disagreement, corrections, highlighting)."""
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import logging
 import os
+import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
+import httpx
+
 from app import db
+from app.config import get_settings
+from app.services._llm import LLMCallError, call_gemini, note, take_notes
 from app.errors import CorrectionError, TrustLensError, VerificationError
 from app.models.schemas import VERDICTS, AnalysisResult
 from app.services import m1_bridge
@@ -16,7 +21,7 @@ from app.services.claim_splitter import split_claims
 from app.services.correction import check_correction, write_correction
 from app.services.disagreement import resolve_disagreement
 from app.services.evidence_ranking import rank_evidence
-from app.services.evidence_retrieval import RetrievalError, retrieve_evidence
+from app.services.evidence_retrieval import HEADERS as WIKI_HEADERS, RetrievalError, retrieve_evidence
 from app.services.highlighting import highlight_evidence
 from app.services.semantic_cache import cache_lookup, cache_store, context_hash
 from app.services.verification import VERIFIERS, verify_claim, verify_claims_batch
@@ -94,31 +99,71 @@ def _trust(answer_id: str, decisions: list[dict], rows: list[dict]) -> dict:
     }
 
 
-def _answer_prompt(question: str) -> str:
-    """Ask for a short, direct, current answer. Wikipedia notes are given as background so
-    the model is not stuck at its training cutoff for recent events (e.g. the latest award winner)."""
+_RECENT = re.compile(r"\b(latest|current|currently|recent|recently|newest|now|today|this year|last year|present)\b", re.I)
+_FILLER = re.compile(r"\b(tell me about|who is|who was|who won|what is|what was|the|latest|current|currently|recent|recently|newest|now|today|winner|holder)\b", re.I)
+_RULES = (
+    "Answer the question in 3 to 5 short, plain factual sentences (under 90 words).\n"
+    "Rules: answer directly; no greetings, apologies, disclaimers, advice, lists or markdown; "
+    "each sentence states one checkable fact with names, numbers and years where relevant."
+)
+
+
+def _wiki_title(topic: str) -> str:
+    """Wikipedia's own spelling of a topic ('Ballon dor' -> "Ballon d'Or"), so year pages are found."""
     try:
-        notes = retrieve_evidence(question, claim_id="q", k=4)
-    except RetrievalError:
-        notes = []
-    background = "\n".join(f"- {n['passage']}" for n in notes[:4]) or "- (no background notes found)"
+        r = httpx.get("https://en.wikipedia.org/w/api.php", params={"action": "opensearch", "search": topic, "limit": 1, "format": "json"},
+                      headers=WIKI_HEADERS, timeout=10)
+        titles = r.json()[1]
+        return titles[0] if titles else topic
+    except (httpx.HTTPError, ValueError, IndexError):
+        return topic
+
+
+def _background(question: str) -> list[str]:
+    """Wikipedia notes for the question. For 'latest/current' questions also search the
+    year-specific pages (e.g. '2025 Ballon d'Or'), which name the most recent result."""
+    queries = [question]
+    if _RECENT.search(question):
+        topic = _wiki_title(re.sub(r"\s+", " ", _FILLER.sub(" ", question)).strip(" ?."))
+        year = datetime.now(timezone.utc).year
+        queries = [f"{year} {topic}", f"{year - 1} {topic}", question]
+    notes: list[str] = []
+    for q in queries:
+        try:
+            notes += [n["passage"] for n in retrieve_evidence(q, claim_id="q", k=3)]
+        except RetrievalError:
+            continue
+    return notes[:6]
+
+
+def _generate(question: str) -> tuple[str, str]:
+    """(answer, who wrote it). Recent questions: Gemini with Google Search first.
+    Otherwise, or if that fails: M1's Groq generator with today's date and Wikipedia notes."""
     today = datetime.now(timezone.utc).strftime("%d %B %Y")
-    return (
-        f"Today is {today}.\n"
-        "Answer the question in 3 to 5 short, plain factual sentences (under 90 words).\n"
-        "Rules: answer directly; no greetings, apologies, disclaimers, advice, lists or markdown; "
-        "each sentence states one checkable fact; for recent or 'latest' questions prefer the background notes "
-        "over your own memory, and if the notes don't say, give the most recent fact you are sure of with its year.\n\n"
-        f"Background notes:\n{background}\n\nQuestion: {question}"
-    )
+    if _RECENT.search(question) and not get_settings().mock:
+        settings = get_settings()
+        try:
+            text = call_gemini(f"Today is {today}. Use Google Search for up-to-date facts.\n{_RULES}\n\nQuestion: {question}",
+                               settings.gemini_flash_model, settings.gemini_api_key, settings.http_timeout, search=True).strip()
+            if text:
+                return text, f"{settings.gemini_flash_model} + Google Search"
+        except LLMCallError as exc:
+            note(f"Gemini Google Search unavailable ({exc}); answered from Wikipedia notes instead.")
+    background = "\n".join(f"- {n}" for n in _background(question)) or "- (no background notes found)"
+    prompt = (f"Today is {today}.\n{_RULES}\nFor recent or 'latest' questions prefer the background notes over your own memory.\n\n"
+              f"Background notes:\n{background}\n\nQuestion: {question}")
+    answer, model = asyncio.run(m1_bridge.generate(prompt))
+    return answer, f"{model} (M1 generator) + Wikipedia notes"
 
 
 def analyze(question: str | None, answer_text: str | None) -> dict:
     answer_id = f"a_{uuid.uuid4().hex[:12]}"
+    take_notes()  # start this analysis with a clean list
+    source = None
     if answer_text:
         answer = answer_text.strip()
     else:
-        answer, _ = asyncio.run(m1_bridge.generate(_answer_prompt(question or "")))
+        answer, source = _generate(question or "")
 
     claims = split_claims(answer, answer_id=answer_id)[:MAX_CLAIMS]
     log.warning("analysis %s: %d claims to check", answer_id, len(claims))
@@ -201,6 +246,8 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
         "decisions": decisions,
         "trust_score": _trust(answer_id, decisions, rows if len(rows) == len(decisions) else []),
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "answer_source": source,
+        "notes": take_notes(),
     }
     AnalysisResult.model_validate(result)
     db.save_analysis(result)
