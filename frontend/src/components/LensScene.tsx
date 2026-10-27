@@ -13,7 +13,9 @@ const FADE_MS = 600;
 
 const RADAR_AFTER_MS = 2500;
 // before any new animation the eyes appear, react in that state's colour, then hand over
-const EYES_MS = 800;
+const EYES_MS = 1200;
+// then the eyes shrink into the centre while the action's animation grows out of that point
+const HANDOFF_MS = 700;
 
 function heatRamp(v: number): RGB {
   // 0 = dark ember, 1 = white-yellow core
@@ -298,27 +300,19 @@ export default function LensScene({ mode, palette }: Props) {
 
     // expression weights blend smoothly so the face never jumps between moods
     const mood = { focus: 0, happy: 0, angry: 0, doubt: 0 };
-    const place = { x: -1, y: -1, scale: 1 };
     const sheet = document.createElement("canvas");
     const sg = sheet.getContext("2d")!;
 
-    function drawEyes(state: SceneMode, inLead: boolean, now: number, excite: number) {
+    function drawEyes(state: SceneMode, alpha: number, shrink: number, now: number, excite: number) {
+      if (alpha <= 0) return;
       const lightPage = document.documentElement.dataset.theme === "light";
       const tint = tintFor(state);
       const [r, g, b] = lightPage ? onLight(tint) : tint;
 
       // where: big in the middle on idle and during the lead-in, then small at the top so the scene plays below
-      const home = state === "idle" || inLead;
-      const tx0 = width / 2;
-      const ty0 = home ? height / 2 : height * 0.14;
-      const ts = home ? 1 : 0.4;
-      if (place.x < 0) Object.assign(place, { x: tx0, y: ty0, scale: ts });
-      place.x += (tx0 - place.x) * 0.08;
-      place.y += (ty0 - place.y) * 0.08;
-      place.scale += (ts - place.scale) * 0.08;
-      const unit = (Math.min(width, height) / 9) * place.scale;
-      const cx = place.x;
-      const cy = place.y;
+      const unit = (Math.min(width, height) / 9) * (1 - shrink * 0.75);
+      const cx = width / 2;
+      const cy = height / 2;
 
       const target = {
         focus: state === "loading" ? 1 : 0,
@@ -425,6 +419,7 @@ export default function LensScene({ mode, palette }: Props) {
       sg.globalCompositeOperation = "source-over";
       ctx!.save();
       ctx!.setTransform(1, 0, 0, 1, 0, 0);
+      ctx!.globalAlpha = alpha;
       ctx!.drawImage(sheet, 0, 0);
       ctx!.restore();
     }
@@ -444,7 +439,7 @@ export default function LensScene({ mode, palette }: Props) {
       const clamp = (v: number) => Math.min(1, Math.max(0, v));
       const lead = m.current === "idle" ? 0 : EYES_MS;
       const out = m.previous === null ? 1 : clamp(since / FADE_MS); // old scene fades out
-      const fade = clamp((since - lead) / FADE_MS); // new scene fades in after the eyes
+      const fade = clamp((since - lead) / HANDOFF_MS); // new scene appears as the eyes hand over
       const after = Math.max(0, since - lead); // time since the new scene itself started
       if (out >= 1 && fade >= 1) m.previous = null;
 
@@ -454,6 +449,12 @@ export default function LensScene({ mode, palette }: Props) {
       glow.addColorStop(1, "rgba(0,0,0,0)");
       ctx!.fillStyle = glow;
       ctx!.fillRect(0, 0, width, height);
+
+      const grow = m.current === "idle" ? 1 : 0.35 + 0.65 * (1 - Math.pow(1 - fade, 3));
+      ctx!.save();
+      ctx!.translate(width / 2, height / 2);
+      ctx!.scale(grow, grow);
+      ctx!.translate(-width / 2, -height / 2);
 
       // loading: the flame burns while the answer is written, then flattens into a radar sweep
       const loading = m.current === "loading";
@@ -478,9 +479,15 @@ export default function LensScene({ mode, palette }: Props) {
       if (m.previous && m.previous !== "loading" && m.previous !== "idle") drawField(m.previous, 1 - out, t, since);
       if (!loading && m.current !== "idle") drawField(m.current, fade, t, after);
 
-      // eyes stay on screen in every state: big and centred for the lead-in, then up top with that state's expression
-      const inLead = m.current !== "idle" && since < lead;
-      drawEyes(m.current, inLead, now, inLead ? Math.sin(clamp(since / lead) * Math.PI) : 0);
+      ctx!.restore();
+
+      // every action starts with the eyes reacting in that state's colour and expression,
+      // then they shrink into the centre and the action's own animation takes over
+      if (m.current === "idle") drawEyes("idle", m.previous === null ? 1 : out, 0, now, 0);
+      else if (since < lead + HANDOFF_MS) {
+        const hand = clamp((since - lead) / HANDOFF_MS);
+        drawEyes(m.current, 1 - hand, hand, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
+      }
 
       frame = requestAnimationFrame(draw);
     }
