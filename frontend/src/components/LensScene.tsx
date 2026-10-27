@@ -166,7 +166,7 @@ interface Props {
 
 export default function LensScene({ mode, palette }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const modeRef = useRef<{ current: SceneMode; previous: SceneMode | null; since: number; previousRadar?: boolean }>({ current: mode, previous: null, since: 0 });
+  const modeRef = useRef<{ current: SceneMode; previous: SceneMode | null; since: number; previousRadar?: boolean }>({ current: mode, previous: null, since: performance.now() });
   const colorsRef = useRef<Record<Verdict, RGB> | null>(null);
   const heatRef = useRef(palette === "heat");
   heatRef.current = palette === "heat";
@@ -209,14 +209,15 @@ export default function LensScene({ mode, palette }: Props) {
     }
 
     function stepFire(feeding: boolean) {
-      // flame burns in the middle of the panel: base just below centre, rising through it
-      const radius = Math.min(width * 0.42, height * 0.4);
-      const base = Math.min(rows - 1, Math.round((height / 2 + radius * 0.55) / CELL_W));
+      // flame rises from the very bottom of the panel up to the upper middle
+      const base = rows - 1;
       const cx = cols / 2;
-      const spread = (radius * 0.5) / CELL_W;
+      const spread = Math.min(cols * 0.22, (width * 0.2) / CELL_W);
+      // cooling per row is set so the tips reach about 70% of the panel height
+      const cool = 1.7 / (rows * 0.7);
       for (let x = 0; x < cols; x++) {
         const k = Math.exp(-(((x - cx) / spread) ** 2) * 1.4);
-        fire[base * cols + x] = feeding ? k * (0.78 + 0.22 * Math.random()) : 0;
+        fire[base * cols + x] = feeding ? k * (0.9 + 0.1 * Math.random()) : 0;
         for (let y = base + 1; y < rows; y++) fire[y * cols + x] = 0;
       }
       if (!feeding) {
@@ -228,7 +229,7 @@ export default function LensScene({ mode, palette }: Props) {
           const src = (y + 1) * cols + x;
           const drift = Math.floor(Math.random() * 3) - 1;
           const dst = y * cols + Math.min(cols - 1, Math.max(0, x + drift));
-          fire[dst] = Math.max(0, fire[src] - Math.random() * 0.06);
+          fire[dst] = Math.max(0, fire[src] - Math.random() * cool);
         }
       }
     }
@@ -424,6 +425,37 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.restore();
     }
 
+    const sparks: { x: number; y: number; vx: number; vy: number; life: number }[] = [];
+    function drawSparkles(now: number, since: number) {
+      // a burst when the verdict lands, then a gentle trickle
+      const rate = since < 1500 ? 0.9 : 0.15;
+      if (Math.random() < rate) {
+        const a = Math.random() * Math.PI * 2;
+        const r0 = Math.min(width, height) * (0.25 + Math.random() * 0.2);
+        sparks.push({ x: width / 2 + Math.cos(a) * r0, y: height / 2 + Math.sin(a) * r0 * 0.7, vx: Math.cos(a) * 0.4, vy: -0.5 - Math.random() * 0.6, life: 1 });
+      }
+      const lightPage = document.documentElement.dataset.theme === "light";
+      const [r, g, b] = lightPage ? onLight(tintFor("supported")) : tintFor("supported");
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const p = sparks[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.012;
+        if (p.life <= 0) {
+          sparks.splice(i, 1);
+          continue;
+        }
+        const size = 3 + 3 * Math.sin(p.life * Math.PI) + Math.sin(now / 90 + i) * 0.8;
+        ctx!.save();
+        ctx!.globalAlpha = p.life;
+        ctx!.fillStyle = `rgb(${r},${g},${b})`;
+        ctx!.translate(p.x, p.y);
+        ctx!.rotate(Math.PI / 4);
+        ctx!.fillRect(-size / 2, -size / 2, size, size);
+        ctx!.restore();
+      }
+    }
+
     function tintFor(m: SceneMode): RGB {
       const colors = colorsRef.current ?? (colorsRef.current = readPalette());
       if (m === "supported") return colors.supported;
@@ -450,7 +482,7 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.fillStyle = glow;
       ctx!.fillRect(0, 0, width, height);
 
-      const grow = m.current === "idle" ? 1 : 0.35 + 0.65 * (1 - Math.pow(1 - fade, 3));
+      const grow = m.current === "idle" || m.current === "loading" || m.current === "supported" ? 1 : 0.35 + 0.65 * (1 - Math.pow(1 - fade, 3));
       ctx!.save();
       ctx!.translate(width / 2, height / 2);
       ctx!.scale(grow, grow);
@@ -476,17 +508,21 @@ export default function LensScene({ mode, palette }: Props) {
       if (morph > 0) drawField("radar", morph * fade, t, after);
       else if (m.previous === "loading" && m.previousRadar) drawField("radar", 1 - out, t, since);
 
-      if (m.previous && m.previous !== "loading" && m.previous !== "idle") drawField(m.previous, 1 - out, t, since);
-      if (!loading && m.current !== "idle") drawField(m.current, fade, t, after);
+      if (m.previous && m.previous !== "loading" && m.previous !== "idle" && m.previous !== "supported") drawField(m.previous, 1 - out, t, since);
+      if (!loading && m.current !== "idle" && m.current !== "supported") drawField(m.current, fade, t, after);
 
       ctx!.restore();
 
       // every action starts with the eyes reacting in that state's colour and expression,
       // then they shrink into the centre and the action's own animation takes over
       if (m.current === "idle") drawEyes("idle", m.previous === null ? 1 : out, 0, now, 0);
+      else if (m.current === "supported") {
+        drawEyes("supported", 1, 0, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
+        drawSparkles(now, since);
+      }
       else if (since < lead + HANDOFF_MS) {
         const hand = clamp((since - lead) / HANDOFF_MS);
-        drawEyes(m.current, 1 - hand, hand, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
+        drawEyes(m.current, 1 - hand, loading ? 0 : hand, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
       }
 
       frame = requestAnimationFrame(draw);
