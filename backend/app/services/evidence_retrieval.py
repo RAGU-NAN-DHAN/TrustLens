@@ -1,6 +1,7 @@
 """M2: fetch candidate evidence passages for a claim from Wikipedia, with Brave Search as an optional fallback."""
 
 import os
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -13,6 +14,7 @@ WIKI_API = "https://en.wikipedia.org/w/api.php"
 BRAVE_API = "https://api.search.brave.com/res/v1/web/search"
 HEADERS = {"User-Agent": "TrustLens/0.1 (https://github.com/RAGU-NAN-DHAN/TrustLens; college fact-checking project) python-httpx"}
 PASSAGE_SENTENCES = 3
+_OUTCOME = re.compile(r"(who won|winner|won|champion|result|final|beat|defeated)", re.I)
 
 
 class RetrievalError(TrustLensError):
@@ -52,7 +54,9 @@ def _wikipedia(query: str, pages: int, timeout: float) -> list[dict]:
         page = pages_by_id.get(pid, {})
         for passage in _chunk(page.get("extract", "")):
             out.append({"source": "wikipedia", "url": page.get("fullurl", f"https://en.wikipedia.org/?curid={pid}"), "passage": passage})
-    out.extend(_body_passages(query, ids[0], pages_by_id.get(ids[0], {}), timeout))
+    # read the full text of the top two pages: search order varies, and the answer is often in the body
+    for pid in ids[:2]:
+        out.extend(_body_passages(query, pid, pages_by_id.get(pid, {}), timeout))
     return out
 
 
@@ -71,6 +75,9 @@ def _body_passages(query: str, pid: str, page: dict, timeout: float, keep: int =
     except (httpx.HTTPError, ValueError):
         return []
     want = set(tokens(query))
+    if _OUTCOME.search(query):
+        # "who won ..." questions: the passage that names the result rarely repeats the question's words
+        want |= {"won", "winner", "winners", "champion", "champions", "final", "defeated", "beat", "title"}
     if not want or not text:
         return []
     chunks = _chunk(text)
