@@ -24,6 +24,11 @@ export default function ClaimCard({ claim, decision, evidence, index, defaultOpe
         <span className="claim-badges">
           {decision.needs_human_review && <span className="badge badge-review">Verifiers disagree · needs review</span>}
           {decision.cache_hit && <span className="badge">Cached</span>}
+          {decision.resolved_by_debate && (
+            <span className="badge badge-debate" title="The verifiers first disagreed, saw each other's reasoning once, and then agreed">
+              Resolved by debate
+            </span>
+          )}
           <span className={`pill pill-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
           <span className="src-toggle" title={open ? "Hide sources" : "Show where this was verified from"}>
             {open ? "−" : "+"}

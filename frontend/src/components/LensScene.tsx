@@ -13,9 +13,9 @@ const FADE_MS = 600;
 
 const RADAR_AFTER_MS = 2500;
 // before any new animation the eyes appear, react in that state's colour, then hand over
-const EYES_MS = 600;
+const EYES_MS = 1800;
 // then the eyes shrink into the centre while the action's animation grows out of that point
-const HANDOFF_MS = 450;
+const HANDOFF_MS = 600;
 
 function heatRamp(v: number): RGB {
   // 0 = dark ember, 1 = white-yellow core
@@ -164,9 +164,13 @@ interface Props {
   palette: string;
   // trust score 0..1 shown inside the verified seal
   score?: number;
+  // words from the question, shown as radar blips while searching
+  words?: string[];
 }
 
-export default function LensScene({ mode, palette, score }: Props) {
+export default function LensScene({ mode, palette, score, words = [] }: Props) {
+  const wordsRef = useRef(words);
+  wordsRef.current = words;
   const scoreRef = useRef(score);
   scoreRef.current = score;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -527,6 +531,37 @@ export default function LensScene({ mode, palette, score }: Props) {
       ctx!.restore();
     }
 
+    // the question's words sit around the radar and light up as the sweep passes them
+    function drawBlips(alpha: number, t: number) {
+      const list = wordsRef.current.slice(0, 8);
+      if (!list.length || alpha <= 0) return;
+      const lightPage = document.documentElement.dataset.theme === "light";
+      const radius = Math.min(width * 0.42, height * 0.4);
+      const sweep = (t * 1.6) % (Math.PI * 2);
+      ctx!.save();
+      ctx!.textAlign = "center";
+      ctx!.textBaseline = "middle";
+      list.forEach((word, i) => {
+        // spread evenly round the circle, at varying distances, same spot every frame
+        const a = (i / list.length) * Math.PI * 2 + 0.4;
+        const d = radius * (0.35 + 0.5 * ((i * 0.37) % 1));
+        const x = width / 2 + Math.cos(a) * d;
+        const y = height / 2 + Math.sin(a) * d;
+        const angle = (a + Math.PI * 2) % (Math.PI * 2);
+        const behind = (sweep - angle + Math.PI * 2) % (Math.PI * 2);
+        const glow = behind < 2.2 ? 1 - behind / 2.2 : 0;
+        const [r, g, b] = lightPage ? onLight([246, 180, 80]) : glow > 0.85 ? [255, 246, 230] : [246, 180, 80];
+        ctx!.globalAlpha = alpha * (0.18 + 0.82 * glow);
+        ctx!.fillStyle = `rgb(${r},${g},${b})`;
+        ctx!.beginPath();
+        ctx!.arc(x, y - 12, 2.5 + 2 * glow, 0, Math.PI * 2);
+        ctx!.fill();
+        ctx!.font = `${glow > 0.5 ? 700 : 500} ${Math.max(11, Math.round(radius * 0.07))}px "JetBrains Mono", monospace`;
+        ctx!.fillText(word.toUpperCase(), x, y + 4);
+      });
+      ctx!.restore();
+    }
+
     function tintFor(m: SceneMode): RGB {
       const colors = colorsRef.current ?? (colorsRef.current = readPalette());
       if (m === "supported") return colors.supported;
@@ -576,7 +611,10 @@ export default function LensScene({ mode, palette, score }: Props) {
           ctx!.restore();
         }
       }
-      if (morph > 0) drawField("radar", morph * fade, t, after);
+      if (morph > 0) {
+        drawField("radar", morph * fade, t, after);
+        drawBlips(morph * fade, t);
+      }
       else if (m.previous === "loading" && m.previousRadar) drawField("radar", 1 - out, t, since);
 
       if (m.previous && m.previous !== "loading" && m.previous !== "idle" && m.previous !== "supported") drawField(m.previous, 1 - out, t, since);

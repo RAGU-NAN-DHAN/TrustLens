@@ -7,7 +7,7 @@ import httpx
 
 from app.config import get_settings
 from app.errors import TrustLensError
-from app.services._text import split_sentences
+from app.services._text import split_sentences, tokens
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 BRAVE_API = "https://api.search.brave.com/res/v1/web/search"
@@ -52,7 +52,31 @@ def _wikipedia(query: str, pages: int, timeout: float) -> list[dict]:
         page = pages_by_id.get(pid, {})
         for passage in _chunk(page.get("extract", "")):
             out.append({"source": "wikipedia", "url": page.get("fullurl", f"https://en.wikipedia.org/?curid={pid}"), "passage": passage})
+    out.extend(_body_passages(query, ids[0], pages_by_id.get(ids[0], {}), timeout))
     return out
+
+
+def _body_passages(query: str, pid: str, page: dict, timeout: float, keep: int = 6) -> list[dict]:
+    """Details such as lists of years usually sit in the article body, not the intro.
+    Fetch the top page's full text and keep the passages that share the most words with the query."""
+    try:
+        full = httpx.get(
+            WIKI_API,
+            params={"action": "query", "prop": "extracts", "explaintext": 1, "pageids": pid, "format": "json"},
+            headers=HEADERS,
+            timeout=timeout,
+        )
+        full.raise_for_status()
+        text = full.json().get("query", {}).get("pages", {}).get(pid, {}).get("extract", "")
+    except (httpx.HTTPError, ValueError):
+        return []
+    want = set(tokens(query))
+    if not want or not text:
+        return []
+    chunks = _chunk(text)
+    scored = sorted(((len(want & set(tokens(c))), i, c) for i, c in enumerate(chunks)), reverse=True)
+    url = page.get("fullurl", f"https://en.wikipedia.org/?curid={pid}")
+    return [{"source": "wikipedia", "url": url, "passage": c} for n, _, c in scored[:keep] if n > 0]
 
 
 def _brave(query: str, key: str, timeout: float) -> list[dict]:
@@ -67,7 +91,7 @@ def _brave(query: str, key: str, timeout: float) -> list[dict]:
     return [{"source": "brave", "url": r.get("url", ""), "passage": r.get("description", "")} for r in results if r.get("description")]
 
 
-def retrieve_evidence(claim_text: str, claim_id: str = "", k: int = 8, mock: bool | None = None) -> list[dict]:
+def retrieve_evidence(claim_text: str, claim_id: str = "", k: int = 14, mock: bool | None = None) -> list[dict]:
     """Up to k unranked Evidence dicts. Raises RetrievalError only if every source fails."""
     settings = get_settings()
     if settings.mock if mock is None else mock:

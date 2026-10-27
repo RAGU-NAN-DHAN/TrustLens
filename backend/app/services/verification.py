@@ -102,7 +102,7 @@ def verify_claim(
     }
 
 
-def verify_claims_batch(items: list[tuple[str, str, list[dict]]], verifier: str) -> dict[str, dict]:
+def verify_claims_batch(items: list[tuple[str, str, list[dict]]], verifier: str, peer: dict[str, dict] | None = None) -> dict[str, dict]:
     """Judge many claims in ONE model call (free tiers allow few calls a minute).
     items = (claim_id, claim_text, evidence). Returns results by claim_id; claims the
     model skipped or answered badly are left out so the caller can retry them one by one."""
@@ -112,7 +112,15 @@ def verify_claims_batch(items: list[tuple[str, str, list[dict]]], verifier: str)
     if settings.mock or not items:
         return {cid: verify_claim(text, ev, verifier, claim_id=cid) for cid, text, ev in items}
 
-    blocks = "\n\n".join(f"CLAIM {cid}:\n{text}\nEVIDENCE for {cid}:\n{format_evidence(ev)}" for cid, text, ev in items)
+    def block(cid: str, text: str, ev: list[dict]) -> str:
+        out = f"CLAIM {cid}:\n{text}\nEVIDENCE for {cid}:\n{format_evidence(ev)}"
+        if peer and cid in peer:
+            # debate round: show the other checker's verdict and reason once
+            out += (f"\nANOTHER INDEPENDENT CHECKER said \"{peer[cid]['verdict']}\" because: {peer[cid]['explanation']}\n"
+                    "Reconsider using ONLY the evidence. Change your verdict only if their reason is correct; otherwise keep it.")
+        return out
+
+    blocks = "\n\n".join(block(cid, text, ev) for cid, text, ev in items)
     model, raw = _call_real(verifier, _BATCH_PROMPT.replace("<<CLAIMS>>", blocks), settings)
     try:
         rows = parse_json_object(raw).get("results")

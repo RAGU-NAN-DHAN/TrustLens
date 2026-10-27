@@ -53,6 +53,8 @@ export interface ClaimDecision {
   correction_verified?: boolean | null;
   correction_support_score?: number | null;
   cache_hit: boolean;
+  resolved_by_debate?: boolean;
+  first_verdicts?: Record<string, Verdict> | null;
 }
 
 export interface TrustScore {

@@ -66,6 +66,9 @@ class ClaimDecision(BaseModel):
     correction_verified: bool | None = None
     correction_support_score: float | None = None
     cache_hit: bool = False
+    # the verifiers first disagreed, saw each other's reasoning once, and then agreed
+    resolved_by_debate: bool = False
+    first_verdicts: dict[str, Verdict] | None = None
 
 
 class TrustScore(BaseModel):

@@ -227,6 +227,29 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
         with ThreadPoolExecutor(max_workers=len(VERIFIERS)) as pool:
             batched = dict(zip(VERIFIERS, pool.map(batch, VERIFIERS)))
 
+    # 2b. debate: where both verifiers answered but disagree, each sees the other's reason once and re-judges.
+    # Only those claims are sent, in one call per verifier, so agreement costs nothing extra.
+    debated: dict[str, dict[str, str]] = {}
+    if len(batched) == len(VERIFIERS):
+        a, b = VERIFIERS
+        split = [t for t in todo if t[0] in batched[a] and t[0] in batched[b] and batched[a][t[0]]["verdict"] != batched[b][t[0]]["verdict"]]
+        if split:
+            first = {cid: {a: batched[a][cid]["verdict"], b: batched[b][cid]["verdict"]} for cid, _, _ in split}
+
+            def rebut(pair: tuple[str, str]) -> dict[str, dict]:
+                me, other = pair
+                try:
+                    return verify_claims_batch(split, me, peer={cid: batched[other][cid] for cid, _, _ in split})
+                except VerificationError:
+                    return {}
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                second = dict(zip((a, b), pool.map(rebut, [(a, b), (b, a)])))
+            for cid, _, _ in split:
+                if cid in second[a] and cid in second[b]:
+                    batched[a][cid], batched[b][cid] = second[a][cid], second[b][cid]
+                    debated[cid] = first[cid]
+
     # 3. disagreement rule and corrections per claim; only verdicts missing from the batch cost extra calls
     def finish(i: int) -> tuple[dict, list[dict], dict | None]:
         claim = claims[i]
@@ -239,6 +262,9 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
         else:
             got = {v: batched[v][claim["claim_id"]] for v in batched if claim["claim_id"] in batched[v]}
             decision = _judge(claim, evidence, got, dead)
+            if claim["claim_id"] in debated:
+                decision["first_verdicts"] = debated[claim["claim_id"]]
+                decision["resolved_by_debate"] = decision["verifier_agreement"]
             if evidence and not decision["needs_human_review"]:
                 cache_store(claim["text"], ctx, decision)
 

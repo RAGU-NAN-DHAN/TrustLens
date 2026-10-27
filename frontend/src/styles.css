@@ -1106,3 +1106,8 @@ mark {
   font-style: normal;
   font-size: 12px;
 }
+
+.badge-debate {
+  color: var(--sup);
+  border-color: rgba(var(--sup-rgb), 0.5);
+}
