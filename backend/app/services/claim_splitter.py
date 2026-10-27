@@ -19,6 +19,12 @@ Rules:
 - Replace pronouns with the name they refer to, so every claim stands alone.
 - Skip opinions, advice, greetings and questions.
 - Keep the wording close to the answer. Do not add facts.
+- Every claim must be a complete, unambiguous sentence that is true or false on its own,
+  with the full subject and the full name of the thing (e.g. "the Formula One World Drivers' Championship").
+- Never make a claim vaguer than the answer. A list like "won titles in 2008, 2014 and 2015" becomes
+  "Lewis Hamilton won the Formula One World Drivers' Championship in 2008." and so on, never
+  "Lewis Hamilton's championships were secured in 2008."
+- At most 6 claims: keep the most important facts; fold minor details into the claim they belong to.
 
 Reply with JSON only: {"claims": [{"text": "<claim>", "sentence": "<the exact sentence of the ANSWER it comes from>"}]}
 

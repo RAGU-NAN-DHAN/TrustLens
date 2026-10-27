@@ -22,6 +22,8 @@ Rules:
 - "contradicted": the evidence explicitly states something incompatible with the claim.
 - "unverifiable": the evidence neither confirms nor contradicts the claim.
 - If unsure, answer "unverifiable". Never answer "supported" on a partial match.
+- Judge what the claim plainly means, as a normal reader would; awkward wording alone is not a contradiction.
+- "contradicted" needs evidence that states something different; evidence that is merely silent means "unverifiable".
 
 Reply with JSON only, no other text:
 {"verdict": "supported" | "contradicted" | "unverifiable",
@@ -45,6 +47,8 @@ Rules:
 - "contradicted": the evidence explicitly states something incompatible with the claim.
 - "unverifiable": the evidence neither confirms nor contradicts the claim.
 - If unsure, answer "unverifiable". Never answer "supported" on a partial match.
+- Judge what the claim plainly means, as a normal reader would; awkward wording alone is not a contradiction.
+- "contradicted" needs evidence that states something different; evidence that is merely silent means "unverifiable".
 
 Reply with JSON only, no other text, one entry per claim:
 {"results": [{"claim_id": "<id>",
