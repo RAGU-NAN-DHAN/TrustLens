@@ -94,12 +94,31 @@ def _trust(answer_id: str, decisions: list[dict], rows: list[dict]) -> dict:
     }
 
 
+def _answer_prompt(question: str) -> str:
+    """Ask for a short, direct, current answer. Wikipedia notes are given as background so
+    the model is not stuck at its training cutoff for recent events (e.g. the latest award winner)."""
+    try:
+        notes = retrieve_evidence(question, claim_id="q", k=4)
+    except RetrievalError:
+        notes = []
+    background = "\n".join(f"- {n['passage']}" for n in notes[:4]) or "- (no background notes found)"
+    today = datetime.now(timezone.utc).strftime("%d %B %Y")
+    return (
+        f"Today is {today}.\n"
+        "Answer the question in 3 to 5 short, plain factual sentences (under 90 words).\n"
+        "Rules: answer directly; no greetings, apologies, disclaimers, advice, lists or markdown; "
+        "each sentence states one checkable fact; for recent or 'latest' questions prefer the background notes "
+        "over your own memory, and if the notes don't say, give the most recent fact you are sure of with its year.\n\n"
+        f"Background notes:\n{background}\n\nQuestion: {question}"
+    )
+
+
 def analyze(question: str | None, answer_text: str | None) -> dict:
     answer_id = f"a_{uuid.uuid4().hex[:12]}"
     if answer_text:
         answer = answer_text.strip()
     else:
-        answer, _ = asyncio.run(m1_bridge.generate(question or ""))
+        answer, _ = asyncio.run(m1_bridge.generate(_answer_prompt(question or "")))
 
     claims = split_claims(answer, answer_id=answer_id)[:MAX_CLAIMS]
     log.warning("analysis %s: %d claims to check", answer_id, len(claims))

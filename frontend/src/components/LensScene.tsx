@@ -12,6 +12,8 @@ const CELL_H = 14;
 const FADE_MS = 600;
 
 const RADAR_AFTER_MS = 2500;
+// before any new animation the eyes appear, react in that state's colour, then hand over
+const EYES_MS = 800;
 
 function heatRamp(v: number): RGB {
   // 0 = dark ember, 1 = white-yellow core
@@ -294,10 +296,10 @@ export default function LensScene({ mode, palette }: Props) {
     }
     window.addEventListener("pointermove", onPointer);
 
-    function drawEyes(alpha: number, now: number) {
+    function drawEyes(alpha: number, now: number, tint: RGB = [246, 180, 80], excite = 0) {
       if (alpha <= 0) return;
       const lightPage = document.documentElement.dataset.theme === "light";
-      const [r, g, b] = lightPage ? onLight([246, 180, 80]) : ([246, 180, 80] as RGB);
+      const [r, g, b] = lightPage ? onLight(tint) : tint;
       const cx = width / 2;
       const cy = height / 2;
       const unit = Math.min(width, height) / 9;
@@ -336,8 +338,9 @@ export default function LensScene({ mode, palette }: Props) {
         }
       }
 
-      const ew = unit * 0.75;
-      const eh = unit * 1.1 * (1 - blink) + 1.5;
+      // excite: eyes widen briefly when a new state arrives
+      const ew = unit * 0.75 * (1 + excite * 0.12);
+      const eh = unit * 1.1 * (1 + excite * 0.18) * (excite > 0 ? 1 : 1 - blink) + 1.5;
       const breathe = Math.sin(now / 900) * unit * 0.04;
       ctx!.save();
       ctx!.globalAlpha = alpha;
@@ -361,12 +364,24 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.restore();
     }
 
+    function tintFor(m: SceneMode): RGB {
+      const colors = colorsRef.current ?? (colorsRef.current = readPalette());
+      if (m === "supported") return colors.supported;
+      if (m === "contradicted") return colors.contradicted;
+      if (m === "unverifiable") return colors.unverifiable;
+      return [246, 180, 80];
+    }
+
     function draw(now: number) {
       const t = now / 1000;
       const m = modeRef.current;
-      const fade = m.previous === null ? 1 : Math.min(1, (now - m.since) / FADE_MS);
-      if (fade >= 1) m.previous = null;
       const since = now - m.since;
+      const clamp = (v: number) => Math.min(1, Math.max(0, v));
+      const lead = m.current === "idle" ? 0 : EYES_MS;
+      const out = m.previous === null ? 1 : clamp(since / FADE_MS); // old scene fades out
+      const fade = clamp((since - lead) / FADE_MS); // new scene fades in after the eyes
+      const after = Math.max(0, since - lead); // time since the new scene itself started
+      if (out >= 1 && fade >= 1) m.previous = null;
 
       ctx!.clearRect(0, 0, width, height);
       const glow = ctx!.createRadialGradient(width / 2, height / 2, 10, width / 2, height / 2, Math.min(width, height) * 0.6);
@@ -376,11 +391,11 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.fillRect(0, 0, width, height);
 
       // loading: the flame burns while the answer is written, then flattens into a radar sweep
-      const morph = m.current === "loading" ? Math.min(1, Math.max(0, (since - RADAR_AFTER_MS) / 900)) : 0;
-      const fireOn = m.current === "loading" || m.previous === "loading";
-      if (fireOn || fire.some((v) => v > 0.05)) {
+      const loading = m.current === "loading";
+      const morph = loading ? clamp((after - RADAR_AFTER_MS) / 900) : 0;
+      if (loading || fire.some((v) => v > 0.05)) {
         if (now - lastFire > 45) {
-          stepFire(m.current === "loading");
+          stepFire(loading && since >= lead);
           lastFire = now;
         }
         if (morph < 1) {
@@ -388,16 +403,23 @@ export default function LensScene({ mode, palette }: Props) {
           ctx!.translate(width / 2, height / 2);
           ctx!.scale(1 + morph * 0.8, 1 - morph * 0.9);
           ctx!.translate(-width / 2, -height / 2);
-          drawFire((m.current === "loading" ? fade : 1) * (1 - morph));
+          drawFire((loading ? fade : 1 - out) * (1 - morph));
           ctx!.restore();
         }
       }
-      if (morph > 0) drawField("radar", morph, t, since);
-      else if (m.previous === "loading" && fade < 1 && m.previousRadar) drawField("radar", 1 - fade, t, since);
-      if (m.current === "idle") drawEyes(fade, now);
-      else if (m.previous === "idle") drawEyes(1 - fade, now);
-      if (m.previous && m.previous !== "loading") drawField(m.previous, 1 - fade, t, since);
-      if (m.current !== "loading") drawField(m.current, fade, t, since);
+      if (morph > 0) drawField("radar", morph * fade, t, after);
+      else if (m.previous === "loading" && m.previousRadar) drawField("radar", 1 - out, t, since);
+
+      // eyes: resting on idle, otherwise a short lead-in that reacts in the new state's colour
+      if (m.current === "idle") drawEyes(m.previous === null ? 1 : out, now);
+      else if (since < lead + FADE_MS) {
+        const eyesIn = m.previous === "idle" || m.previous === null ? 1 : clamp(since / FADE_MS);
+        const excite = Math.sin(clamp(since / lead) * Math.PI);
+        drawEyes(Math.min(eyesIn, 1 - fade), now, tintFor(m.current), excite);
+      }
+
+      if (m.previous && m.previous !== "loading" && m.previous !== "idle") drawField(m.previous, 1 - out, t, since);
+      if (!loading && m.current !== "idle") drawField(m.current, fade, t, after);
 
       frame = requestAnimationFrame(draw);
     }
