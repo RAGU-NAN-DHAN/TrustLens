@@ -9,8 +9,10 @@ import httpx
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-RATE_LIMIT_RETRIES = 3
-RATE_LIMIT_WAIT = 6.0  # free tiers allow only a few requests per minute; keep waits short so a check stays fast
+RATE_LIMIT_RETRIES = 1
+RATE_LIMIT_WAIT = 2.0  # one short retry only: a check must finish in seconds, not wait out a quota
+KEY_COOLDOWN = 60.0  # a key that returned 429 is tried last for this long
+_cooling: dict[str, float] = {}
 
 
 def _post(url: str, headers: dict, body: dict, timeout: float) -> httpx.Response:
@@ -47,14 +49,23 @@ def take_notes() -> list[str]:
 def _post_failover(url: str, keys: list[str], body: dict, timeout: float, patient: bool = True) -> httpx.Response:
     """Try each key once; a key that is out of quota or busy hands over to the next immediately.
     Only the last key gets the slower retry loop."""
-    for i, key in enumerate(keys[:-1]):
+    # keys that recently hit their limit go to the back of the queue
+    now = time.monotonic()
+    order = sorted(range(len(keys)), key=lambda i: _cooling.get(keys[i], 0) > now)
+    keys = [keys[i] for i in order]
+    for n, key in enumerate(keys[:-1]):
         resp = httpx.post(url, headers={"x-goog-api-key": key}, json=body, timeout=timeout)
         if resp.status_code not in (429, 500, 502, 503, 504):
             return resp
-        note(f"Gemini key {i + 1} hit its limit (HTTP {resp.status_code}); switched to backup key {i + 2}.")
+        if resp.status_code == 429:
+            _cooling[key] = time.monotonic() + KEY_COOLDOWN
+        note(f"Gemini key {order[n] + 1} hit its limit (HTTP {resp.status_code}); switched to backup key {order[n + 1] + 1}.")
     if not patient:  # optional extras (Google Search) give up at once instead of waiting out the limit
         return httpx.post(url, headers={"x-goog-api-key": keys[-1]}, json=body, timeout=timeout)
-    return _post(url, {"x-goog-api-key": keys[-1]}, body, timeout)
+    resp = _post(url, {"x-goog-api-key": keys[-1]}, body, timeout)
+    if resp.status_code == 429:
+        _cooling[keys[-1]] = time.monotonic() + KEY_COOLDOWN
+    return resp
 
 
 def call_gemini(prompt: str, model: str, api_key: str, timeout: float, search: bool = False) -> str:

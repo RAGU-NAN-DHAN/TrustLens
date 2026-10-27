@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -32,13 +33,17 @@ log = logging.getLogger("trustlens.pipeline")
 MAX_CLAIMS = int(os.getenv("TRUSTLENS_MAX_CLAIMS", "6"))
 
 
-def _judge(claim: dict, evidence: list[dict], batched: dict[str, dict] | None = None) -> dict:
+def _judge(claim: dict, evidence: list[dict], batched: dict[str, dict] | None = None, dead: set[str] | None = None) -> dict:
     results, failures = [], []
     batched = batched or {}
+    dead = dead or set()
 
     def run(verifier):
         if verifier in batched:
             return batched[verifier], None
+        if verifier in dead:
+            # its whole batch call failed (usually the free limit): retrying claim by claim would only wait longer
+            return None, f"{verifier} verifier unavailable"
         try:
             return verify_claim(claim["text"], evidence, verifier, claim_id=claim["claim_id"]), None
         except VerificationError as exc:
@@ -127,13 +132,17 @@ def _background(question: str) -> list[dict]:
         topic = _wiki_title(re.sub(r"\s+", " ", _FILLER.sub(" ", question)).strip(" ?."))
         year = datetime.now(timezone.utc).year
         queries = [f"{year} {topic}", f"{year - 1} {topic}", question]
+    def search(q: str) -> list[dict]:
+        try:
+            return retrieve_evidence(q, claim_id="q", k=3)
+        except RetrievalError:
+            return []
+
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        results = list(pool.map(search, queries))
     notes: list[dict] = []
     seen: set[str] = set()
-    for q in queries:
-        try:
-            found = retrieve_evidence(q, claim_id="q", k=3)
-        except RetrievalError:
-            continue
+    for found in results:
         for n in found:
             if n["passage"] not in seen:
                 seen.add(n["passage"])
@@ -141,11 +150,15 @@ def _background(question: str) -> list[dict]:
     return notes[:6]
 
 
+_search_off_until = 0.0  # Google Search grounding refused (free tier): don't retry it on every question
+
+
 def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
     """(answer, who wrote it). Recent questions: Gemini with Google Search first.
     Otherwise, or if that fails: M1's Groq generator with today's date and Wikipedia notes."""
     today = datetime.now(timezone.utc).strftime("%d %B %Y")
-    if _RECENT.search(question) and not get_settings().mock:
+    global _search_off_until
+    if _RECENT.search(question) and not get_settings().mock and time.monotonic() > _search_off_until:
         settings = get_settings()
         try:
             text = call_gemini(f"Today is {today}. Use Google Search for up-to-date facts.\n{_RULES}\n\nQuestion: {question}",
@@ -153,6 +166,7 @@ def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
             if text:
                 return text, f"{settings.gemini_flash_model} + Google Search"
         except LLMCallError as exc:
+            _search_off_until = time.monotonic() + 900
             note(f"Gemini Google Search unavailable ({exc}); answered from Wikipedia notes instead.")
     background = "\n".join(f"- {n['passage']}" for n in notes) or "- (no background notes found)"
     prompt = (f"Today is {today}.\n{_RULES}\nFor recent or 'latest' questions prefer the background notes over your own memory.\n\n"
@@ -197,11 +211,15 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
     # 2. each verifier judges ALL uncached claims in one call: 2 calls per answer instead of 2 per claim
     todo = [(c["claim_id"], c["text"], ev) for c, (ev, _, cached) in zip(claims, prepared) if not cached]
 
+    dead: set[str] = set()
+
     def batch(verifier: str) -> dict[str, dict]:
         try:
             return verify_claims_batch(todo, verifier)
         except VerificationError as exc:
-            log.warning("batch %s failed, falling back to one call per claim: %s", verifier, exc)
+            log.warning("batch %s failed: %s", verifier, exc)
+            dead.add(verifier)
+            note(f"{'Gemini' if verifier == 'gemini' else 'Qwen'} verifier was unavailable ({exc}); affected claims are marked for review.")
             return {}
 
     batched: dict[str, dict[str, dict]] = {}
@@ -220,7 +238,7 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
                 r["claim_id"] = claim["claim_id"]
         else:
             got = {v: batched[v][claim["claim_id"]] for v in batched if claim["claim_id"] in batched[v]}
-            decision = _judge(claim, evidence, got)
+            decision = _judge(claim, evidence, got, dead)
             if evidence and not decision["needs_human_review"]:
                 cache_store(claim["text"], ctx, decision)
 
