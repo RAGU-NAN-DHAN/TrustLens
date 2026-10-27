@@ -162,9 +162,13 @@ function unverifiableScene(x: number, y: number, c: SceneCtx): Hit {
 interface Props {
   mode: SceneMode;
   palette: string;
+  // trust score 0..1 shown inside the verified seal
+  score?: number;
 }
 
-export default function LensScene({ mode, palette }: Props) {
+export default function LensScene({ mode, palette, score }: Props) {
+  const scoreRef = useRef(score);
+  scoreRef.current = score;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const modeRef = useRef<{ current: SceneMode; previous: SceneMode | null; since: number; previousRadar?: boolean }>({ current: mode, previous: null, since: performance.now() });
   const colorsRef = useRef<Record<Verdict, RGB> | null>(null);
@@ -408,7 +412,7 @@ export default function LensScene({ mode, palette }: Props) {
           sg.fill();
         }
         // happy: the lower lid pushes up into a ^ ^ smile
-        if (mood.happy > 0.01) {
+        if (false) {
           sg.beginPath();
           sg.ellipse(ex, ey + eh * (1.9 - mood.happy * 1.05), ew * 1.6, eh * 1.15, 0, 0, Math.PI * 2);
           sg.fill();
@@ -453,6 +457,74 @@ export default function LensScene({ mode, palette }: Props) {
         ctx!.fillRect(-size / 2, -size / 2, size, size);
         ctx!.restore();
       }
+    }
+
+    // verified: a seal stamps down after the eyes and keeps turning slowly, trust score in the centre
+    function drawSeal(alpha: number, now: number, after: number) {
+      if (alpha <= 0) return;
+      const lightPage = document.documentElement.dataset.theme === "light";
+      const [r, g, b] = lightPage ? onLight(tintFor("supported")) : tintFor("supported");
+      const col = (a: number) => `rgba(${r},${g},${b},${a})`;
+      const stamp = Math.min(1, after / 380);
+      // lands from 1.6x down to 1x with a small overshoot, like a rubber stamp
+      const scale = stamp < 1 ? 1.6 - 0.68 * (1 - Math.pow(1 - stamp, 3)) : 1 - 0.08 * Math.exp(-(after - 380) / 120) * Math.cos((after - 380) / 40);
+      const R = Math.min(width, height) * 0.34;
+      ctx!.save();
+      ctx!.globalAlpha = alpha * Math.min(1, after / 200);
+      ctx!.translate(width / 2, height / 2);
+      ctx!.scale(scale, scale);
+
+      // impact ring right when it lands
+      if (after > 380 && after < 1100) {
+        const p = (after - 380) / 720;
+        ctx!.strokeStyle = col(0.5 * (1 - p));
+        ctx!.lineWidth = 2;
+        ctx!.beginPath();
+        ctx!.arc(0, 0, R * (1.05 + p * 0.5), 0, Math.PI * 2);
+        ctx!.stroke();
+      }
+
+      ctx!.strokeStyle = col(1);
+      ctx!.lineWidth = 2.5;
+      ctx!.beginPath();
+      ctx!.arc(0, 0, R, 0, Math.PI * 2);
+      ctx!.stroke();
+      ctx!.lineWidth = 2;
+      ctx!.beginPath();
+      ctx!.arc(0, 0, R * 0.7, 0, Math.PI * 2);
+      ctx!.stroke();
+
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2;
+        ctx!.fillStyle = col(0.35 + 0.65 * Math.max(0, Math.sin(now / 500 + i)));
+        ctx!.fillRect(Math.cos(a) * R * 1.12 - 1.5, Math.sin(a) * R * 1.12 - 1.5, 3, 3);
+      }
+
+      const text = " VERIFIED · EVIDENCE BACKED · VERIFIED · EVIDENCE BACKED ·";
+      const fontPx = Math.max(10, Math.round(R * 0.1));
+      ctx!.save();
+      ctx!.rotate(now / 2500);
+      ctx!.font = `700 ${fontPx}px "JetBrains Mono", monospace`;
+      ctx!.textAlign = "center";
+      ctx!.textBaseline = "middle";
+      ctx!.fillStyle = col(1);
+      for (let i = 0; i < text.length; i++) {
+        ctx!.save();
+        ctx!.rotate((i / text.length) * Math.PI * 2);
+        ctx!.fillText(text[i], 0, -R * 0.85);
+        ctx!.restore();
+      }
+      ctx!.restore();
+
+      const sc = scoreRef.current;
+      ctx!.fillStyle = col(1);
+      ctx!.textAlign = "center";
+      ctx!.textBaseline = "middle";
+      ctx!.font = `700 ${Math.round(R * 0.3)}px "JetBrains Mono", monospace`;
+      ctx!.fillText(sc === undefined ? "OK" : `${Math.round(sc * 100)}%`, 0, -R * 0.06);
+      ctx!.font = `600 ${Math.round(R * 0.09)}px "JetBrains Mono", monospace`;
+      ctx!.fillText("TRUST", 0, R * 0.2);
+      ctx!.restore();
     }
 
     function tintFor(m: SceneMode): RGB {
@@ -512,16 +584,19 @@ export default function LensScene({ mode, palette }: Props) {
 
       ctx!.restore();
 
+      if (m.current === "supported") {
+        drawSeal(fade, now, after);
+        if (after > 380) drawSparkles(now, after - 380);
+      } else if (m.previous === "supported") drawSeal(1 - out, now, 1e6);
+
       // every action starts with the eyes reacting in that state's colour and expression,
       // then they shrink into the centre and the action's own animation takes over
       if (m.current === "idle") drawEyes("idle", m.previous === null ? 1 : out, 0, now, 0);
-      else if (m.current === "supported") {
-        drawEyes("supported", 1, 0, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
-        drawSparkles(now, since);
-      }
       else if (since < lead + HANDOFF_MS) {
         const hand = clamp((since - lead) / HANDOFF_MS);
-        drawEyes(m.current, 1 - hand, 0, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
+        // fade in quickly, hold briefly, fade out into the action's animation
+        const appear = clamp(since / 180);
+        drawEyes(m.current, Math.min(appear, 1 - hand), 0, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
       }
 
       frame = requestAnimationFrame(draw);

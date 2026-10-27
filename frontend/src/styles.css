@@ -1073,3 +1073,36 @@ mark {
   .battery .cell,
   .limit-notice { animation: none; }
 }
+
+/* answer rebuilt from the verdicts */
+.verified-answer {
+  margin-top: 14px;
+  border-color: rgba(var(--sup-rgb), 0.4);
+}
+
+.va-text {
+  margin: 10px 0 6px;
+  line-height: 1.9;
+}
+
+.va-ok {
+  color: var(--text);
+}
+
+.va-fix {
+  color: var(--sup);
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--sup-rgb), 0.6);
+  text-underline-offset: 4px;
+  cursor: help;
+}
+
+.va-unsure {
+  color: var(--muted);
+}
+
+.va-unsure em {
+  color: var(--unv);
+  font-style: normal;
+  font-size: 12px;
+}

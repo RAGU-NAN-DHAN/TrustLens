@@ -1,3 +1,4 @@
+import VerifiedAnswer from "./VerifiedAnswer";
 import LimitNotice from "./LimitNotice";
 import { useState, type FormEvent } from "react";
 import { ApiError, client as defaultClient, type TrustLensClient } from "../api/client";
@@ -127,7 +128,7 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
           <span className="mark bc" />
           <span className="red-dot rd-1" />
           <span className="red-dot rd-2" />
-          <LensScene mode={scene} palette="heat" />
+          <LensScene mode={scene} palette="heat" score={score} />
           <div className="lens-label">
             <span className="br">[</span> trust <b className={level}>{score === undefined ? "—" : percent(score)}</b>{" "}
             <span className="br">]</span>
@@ -153,6 +154,8 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
             ))}
             <p className="muted small disclaimer">{result.trust_score.disclaimer}</p>
           </div>
+
+          <VerifiedAnswer analysis={result} />
 
           <h3 className="section-title">
             <span className="br">[</span> Claims <span className="br">]</span>
