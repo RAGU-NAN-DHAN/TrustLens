@@ -25,6 +25,9 @@ export default function ClaimCard({ claim, decision, evidence, index, defaultOpe
           {decision.needs_human_review && <span className="badge badge-review">Verifiers disagree · needs review</span>}
           {decision.cache_hit && <span className="badge">Cached</span>}
           <span className={`pill pill-${verdict}`}>{VERDICT_LABEL[verdict]}</span>
+          <span className="src-toggle" title={open ? "Hide sources" : "Show where this was verified from"}>
+            {open ? "−" : "+"}
+          </span>
         </span>
       </button>
       {open && (

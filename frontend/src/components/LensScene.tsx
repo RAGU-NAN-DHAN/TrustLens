@@ -296,17 +296,48 @@ export default function LensScene({ mode, palette }: Props) {
     }
     window.addEventListener("pointermove", onPointer);
 
-    function drawEyes(alpha: number, now: number, tint: RGB = [246, 180, 80], excite = 0) {
-      if (alpha <= 0) return;
+    // expression weights blend smoothly so the face never jumps between moods
+    const mood = { focus: 0, happy: 0, angry: 0, doubt: 0 };
+    const place = { x: -1, y: -1, scale: 1 };
+    const sheet = document.createElement("canvas");
+    const sg = sheet.getContext("2d")!;
+
+    function drawEyes(state: SceneMode, inLead: boolean, now: number, excite: number) {
       const lightPage = document.documentElement.dataset.theme === "light";
+      const tint = tintFor(state);
       const [r, g, b] = lightPage ? onLight(tint) : tint;
-      const cx = width / 2;
-      const cy = height / 2;
-      const unit = Math.min(width, height) / 9;
-      const active = now - pointer.at < 4000;
+
+      // where: big in the middle on idle and during the lead-in, then small at the top so the scene plays below
+      const home = state === "idle" || inLead;
+      const tx0 = width / 2;
+      const ty0 = home ? height / 2 : height * 0.14;
+      const ts = home ? 1 : 0.4;
+      if (place.x < 0) Object.assign(place, { x: tx0, y: ty0, scale: ts });
+      place.x += (tx0 - place.x) * 0.08;
+      place.y += (ty0 - place.y) * 0.08;
+      place.scale += (ts - place.scale) * 0.08;
+      const unit = (Math.min(width, height) / 9) * place.scale;
+      const cx = place.x;
+      const cy = place.y;
+
+      const target = {
+        focus: state === "loading" ? 1 : 0,
+        happy: state === "supported" ? 1 : 0,
+        angry: state === "contradicted" ? 1 : 0,
+        doubt: state === "unverifiable" ? 1 : 0,
+      };
+      (Object.keys(mood) as (keyof typeof mood)[]).forEach((k) => (mood[k] += (target[k] - mood[k]) * 0.1));
+
+      // gaze: scan left-right while searching, look up and away when unsure, otherwise follow the cursor
       let tx: number;
       let ty: number;
-      if (active) {
+      if (state === "loading") {
+        tx = Math.sin(now / 260) * unit * 0.5;
+        ty = Math.sin(now / 1300) * unit * 0.1;
+      } else if (state === "unverifiable") {
+        tx = -unit * 0.4;
+        ty = -unit * 0.3;
+      } else if (now - pointer.at < 4000) {
         const dx = pointer.x - cx;
         const dy = pointer.y - cy;
         const d = Math.hypot(dx, dy) || 1;
@@ -314,15 +345,15 @@ export default function LensScene({ mode, palette }: Props) {
         tx = (dx / d) * unit * 0.45 * reach;
         ty = (dy / d) * unit * 0.35 * reach;
       } else {
-        if (now > eyes.glance.until) eyes.glance = { x: (Math.random() - 0.5) * unit * 0.7, y: (Math.random() - 0.5) * unit * 0.3, until: now + 1000 + Math.random() * 2000 };
-        tx = eyes.glance.x;
-        ty = eyes.glance.y;
+        if (now > eyes.glance.until) eyes.glance = { x: (Math.random() - 0.5) * 0.7, y: (Math.random() - 0.5) * 0.3, until: now + 1000 + Math.random() * 2000 };
+        tx = eyes.glance.x * unit;
+        ty = eyes.glance.y * unit;
       }
       eyes.gx += (tx - eyes.gx) * 0.15;
       eyes.gy += (ty - eyes.gy) * 0.15;
 
       let blink = 0;
-      if (eyes.blinkAt < 0 && now > eyes.nextBlink) {
+      if (eyes.blinkAt < 0 && now > eyes.nextBlink && mood.happy < 0.5 && mood.angry < 0.5) {
         eyes.blinkAt = now;
         eyes.double = Math.random() < 0.25;
       }
@@ -338,29 +369,63 @@ export default function LensScene({ mode, palette }: Props) {
         }
       }
 
-      // excite: eyes widen briefly when a new state arrives
+      // the eyes are drawn on their own sheet so the lids can be cut out without erasing the scene behind
+      if (sheet.width !== canvas!.width || sheet.height !== canvas!.height) {
+        sheet.width = canvas!.width;
+        sheet.height = canvas!.height;
+      }
+      sg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      sg.clearRect(0, 0, width, height);
       const ew = unit * 0.75 * (1 + excite * 0.12);
-      const eh = unit * 1.1 * (1 + excite * 0.18) * (excite > 0 ? 1 : 1 - blink) + 1.5;
+      const eh = unit * 1.1 * (1 + excite * 0.18) * (1 - blink) + 1.5;
+      const bounce = mood.happy * Math.abs(Math.sin(now / 220)) * unit * 0.12;
+      const shake = mood.angry * Math.sin(now / 35) * unit * 0.05 * Math.max(0, Math.sin(now / 600));
       const breathe = Math.sin(now / 900) * unit * 0.04;
-      ctx!.save();
-      ctx!.globalAlpha = alpha;
+
       for (const side of [-1, 1]) {
-        const ex = cx + side * unit * 1.55 + eyes.gx;
-        const ey = cy + eyes.gy * 0.8 + breathe;
-        ctx!.shadowColor = `rgba(${r},${g},${b},0.9)`;
-        ctx!.shadowBlur = lightPage ? 6 : unit * 0.5;
-        ctx!.fillStyle = `rgb(${r},${g},${b})`;
-        ctx!.beginPath();
-        ctx!.ellipse(ex, ey, ew, eh, 0, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.shadowBlur = 0;
-        if (eh > ew * 0.4) {
-          ctx!.fillStyle = lightPage ? "rgba(255,255,255,0.7)" : "rgba(255,248,230,0.85)";
-          ctx!.beginPath();
-          ctx!.ellipse(ex - ew * 0.3 + eyes.gx * 0.25, ey - eh * 0.35 + eyes.gy * 0.2, ew * 0.22, eh * 0.16, 0, 0, Math.PI * 2);
-          ctx!.fill();
+        const ex = cx + side * unit * 1.55 + eyes.gx * 0.6 + shake;
+        const ey = cy + eyes.gy * 0.5 + breathe - bounce - (side > 0 ? mood.doubt * unit * 0.25 : 0);
+        sg.globalCompositeOperation = "source-over";
+        sg.shadowColor = `rgba(${r},${g},${b},0.9)`;
+        sg.shadowBlur = lightPage ? 6 : unit * 0.5;
+        sg.fillStyle = `rgb(${r},${g},${b})`;
+        sg.beginPath();
+        sg.ellipse(ex, ey, ew, eh, 0, 0, Math.PI * 2);
+        sg.fill();
+        sg.shadowBlur = 0;
+        sg.fillStyle = lightPage ? "rgba(255,255,255,0.7)" : "rgba(255,248,230,0.85)";
+        sg.beginPath();
+        sg.ellipse(ex - ew * 0.3 + eyes.gx * 0.3, ey - eh * 0.35 + eyes.gy * 0.25, ew * 0.22, Math.max(1, eh * 0.16), 0, 0, Math.PI * 2);
+        sg.fill();
+
+        sg.globalCompositeOperation = "destination-out";
+        sg.fillStyle = "#000";
+        // focused (loading) and doubtful (left eye): a flat upper lid comes down
+        const lid = Math.max(mood.focus * 0.4, side < 0 ? mood.doubt * 0.55 : 0);
+        if (lid > 0.01) sg.fillRect(ex - ew * 1.5, ey - eh * 1.5, ew * 3, eh * 1.5 * lid + eh * 0.5 * lid);
+        // angry: lids slant down toward the nose
+        if (mood.angry > 0.01) {
+          const inner = ex - side * ew * 1.2;
+          const outer = ex + side * ew * 1.2;
+          sg.beginPath();
+          sg.moveTo(outer, ey - eh * 1.6);
+          sg.lineTo(inner, ey - eh * 1.6);
+          sg.lineTo(inner, ey - eh * 1.6 + eh * 1.75 * mood.angry);
+          sg.lineTo(outer, ey - eh * 1.6 + eh * 0.55 * mood.angry);
+          sg.closePath();
+          sg.fill();
+        }
+        // happy: the lower lid pushes up into a ^ ^ smile
+        if (mood.happy > 0.01) {
+          sg.beginPath();
+          sg.ellipse(ex, ey + eh * (1.9 - mood.happy * 1.05), ew * 1.6, eh * 1.15, 0, 0, Math.PI * 2);
+          sg.fill();
         }
       }
+      sg.globalCompositeOperation = "source-over";
+      ctx!.save();
+      ctx!.setTransform(1, 0, 0, 1, 0, 0);
+      ctx!.drawImage(sheet, 0, 0);
       ctx!.restore();
     }
 
@@ -410,16 +475,12 @@ export default function LensScene({ mode, palette }: Props) {
       if (morph > 0) drawField("radar", morph * fade, t, after);
       else if (m.previous === "loading" && m.previousRadar) drawField("radar", 1 - out, t, since);
 
-      // eyes: resting on idle, otherwise a short lead-in that reacts in the new state's colour
-      if (m.current === "idle") drawEyes(m.previous === null ? 1 : out, now);
-      else if (since < lead + FADE_MS) {
-        const eyesIn = m.previous === "idle" || m.previous === null ? 1 : clamp(since / FADE_MS);
-        const excite = Math.sin(clamp(since / lead) * Math.PI);
-        drawEyes(Math.min(eyesIn, 1 - fade), now, tintFor(m.current), excite);
-      }
-
       if (m.previous && m.previous !== "loading" && m.previous !== "idle") drawField(m.previous, 1 - out, t, since);
       if (!loading && m.current !== "idle") drawField(m.current, fade, t, after);
+
+      // eyes stay on screen in every state: big and centred for the lead-in, then up top with that state's expression
+      const inLead = m.current !== "idle" && since < lead;
+      drawEyes(m.current, inLead, now, inLead ? Math.sin(clamp(since / lead) * Math.PI) : 0);
 
       frame = requestAnimationFrame(draw);
     }

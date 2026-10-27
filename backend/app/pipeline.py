@@ -119,7 +119,7 @@ def _wiki_title(topic: str) -> str:
         return topic
 
 
-def _background(question: str) -> list[str]:
+def _background(question: str) -> list[dict]:
     """Wikipedia notes for the question. For 'latest/current' questions also search the
     year-specific pages (e.g. '2025 Ballon d'Or'), which name the most recent result."""
     queries = [question]
@@ -127,16 +127,21 @@ def _background(question: str) -> list[str]:
         topic = _wiki_title(re.sub(r"\s+", " ", _FILLER.sub(" ", question)).strip(" ?."))
         year = datetime.now(timezone.utc).year
         queries = [f"{year} {topic}", f"{year - 1} {topic}", question]
-    notes: list[str] = []
+    notes: list[dict] = []
+    seen: set[str] = set()
     for q in queries:
         try:
-            notes += [n["passage"] for n in retrieve_evidence(q, claim_id="q", k=3)]
+            found = retrieve_evidence(q, claim_id="q", k=3)
         except RetrievalError:
             continue
+        for n in found:
+            if n["passage"] not in seen:
+                seen.add(n["passage"])
+                notes.append(n)
     return notes[:6]
 
 
-def _generate(question: str) -> tuple[str, str]:
+def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
     """(answer, who wrote it). Recent questions: Gemini with Google Search first.
     Otherwise, or if that fails: M1's Groq generator with today's date and Wikipedia notes."""
     today = datetime.now(timezone.utc).strftime("%d %B %Y")
@@ -149,7 +154,7 @@ def _generate(question: str) -> tuple[str, str]:
                 return text, f"{settings.gemini_flash_model} + Google Search"
         except LLMCallError as exc:
             note(f"Gemini Google Search unavailable ({exc}); answered from Wikipedia notes instead.")
-    background = "\n".join(f"- {n}" for n in _background(question)) or "- (no background notes found)"
+    background = "\n".join(f"- {n['passage']}" for n in notes) or "- (no background notes found)"
     prompt = (f"Today is {today}.\n{_RULES}\nFor recent or 'latest' questions prefer the background notes over your own memory.\n\n"
               f"Background notes:\n{background}\n\nQuestion: {question}")
     answer, model = asyncio.run(m1_bridge.generate(prompt))
@@ -160,10 +165,13 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
     answer_id = f"a_{uuid.uuid4().hex[:12]}"
     take_notes()  # start this analysis with a clean list
     source = None
+    # passages found for the question itself; they are also given to every claim as evidence,
+    # so the verifiers see the same pages the answer was written from
+    notes = _background(question) if question and not get_settings().mock else []
     if answer_text:
         answer = answer_text.strip()
     else:
-        answer, source = _generate(question or "")
+        answer, source = _generate(question or "", notes)
 
     claims = split_claims(answer, answer_id=answer_id)[:MAX_CLAIMS]
     log.warning("analysis %s: %d claims to check", answer_id, len(claims))
@@ -174,7 +182,11 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
             candidates = retrieve_evidence(claim["text"], claim_id=claim["claim_id"])
         except RetrievalError:
             candidates = []
-        evidence = highlight_evidence(claim["text"], rank_evidence(claim["text"], candidates))
+        cid = claim["claim_id"]
+        shared = [{**n, "claim_id": cid, "evidence_id": f"e_{cid[2:]}_q{j + 1}"} for j, n in enumerate(notes)]
+        known = {c["passage"] for c in candidates}
+        candidates += [n for n in shared if n["passage"] not in known]
+        evidence = highlight_evidence(claim["text"], rank_evidence(claim["text"], candidates, top_k=5))
         ctx = context_hash(evidence)
         return evidence, ctx, cache_lookup(claim["text"], ctx) if evidence else None
 

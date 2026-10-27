@@ -941,3 +941,34 @@ mark {
   outline: 1px solid var(--text);
   outline-offset: 2px;
 }
+
+/* "+" next to each verdict opens where the claim was verified from */
+.src-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.claim-head:hover .src-toggle {
+  border-color: var(--text);
+}
+
+.sources ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.sources li {
+  margin: 4px 0;
+}
+
+.cited {
+  color: var(--sup);
+  font-size: 12px;
+  margin-left: 6px;
+}
