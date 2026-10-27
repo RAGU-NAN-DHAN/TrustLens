@@ -108,6 +108,8 @@ class AnalysisResult(BaseModel):
     created_at: str | None = None
     # who wrote the answer and anything that happened on the way (key switches, fallbacks)
     answer_source: str | None = None
+    # 'opinion' when the question has no single true answer; verdicts then cover the facts, not the opinion
+    question_type: str = "factual"
     notes: list[str] = []
 
 

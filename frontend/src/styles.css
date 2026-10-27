@@ -1121,3 +1121,11 @@ mark {
   font-style: normal;
   font-size: 12px;
 }
+
+.opinion-note {
+  margin: 10px 0 4px;
+  padding: 8px 12px;
+  border: 1px dashed rgba(var(--unv-rgb), 0.6);
+  color: var(--unv);
+  font-size: 13px;
+}

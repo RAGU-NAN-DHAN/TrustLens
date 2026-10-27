@@ -106,6 +106,17 @@ def _trust(answer_id: str, decisions: list[dict], rows: list[dict]) -> dict:
 
 _RECENT = re.compile(r"\b(la\w{0,3}st|current|currently|recent|recently|newest|now|today|this year|present)\b", re.I)
 _FILLER = re.compile(r"\b(tell me about|who is|who was|who won|what is|what was|what were|result of|results of|score of|the|la\w{0,3}st|current|currently|recent|recently|newest|now|today|winner|holder)\b", re.I)
+# "best laptop", "who deserved", "should I": no single true answer exists, only facts around it
+_OPINION_Q = re.compile(
+    r"\b(best|worst|greatest|better|favou?rite|most beautiful|deserved?|deserves|should i|should we|overrated|underrated|goat)\b", re.I
+)
+_OPINION_RULES = (
+    "This question asks for an opinion. Start with one sentence saying plainly that there is no single correct answer "
+    "and it depends on the person's needs or criteria. Then give 3 to 4 short factual sentences naming commonly "
+    "cited options with checkable facts (specs, awards, results, rankings), never stated as the one right answer.\n"
+    "No greetings, lists or markdown."
+)
+
 _RULES = (
     "Answer the question in 3 to 5 short, plain factual sentences (under 90 words).\n"
     "Rules: answer directly; no greetings, apologies, disclaimers, advice, lists or markdown; "
@@ -171,7 +182,8 @@ def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
             _search_off_until = time.monotonic() + 900
             note(f"Gemini Google Search unavailable ({exc}); answered from Wikipedia notes instead.")
     background = "\n".join(f"- {n['passage']}" for n in notes) or "- (no background notes found)"
-    prompt = (f"Today is {today}.\n{_RULES}\nThe background notes are current; your memory may be out of date. "
+    rules = _OPINION_RULES if _OPINION_Q.search(question) else _RULES
+    prompt = (f"Today is {today}.\n{rules}\nThe background notes are current; your memory may be out of date. "
               "When the notes name the answer (a winner, a result, a date), use exactly what they say. "
               "Answer the question directly as a normal assistant: never mention notes, sources, background "
               "or 'provided information'.\n\n"
@@ -309,6 +321,7 @@ def analyze(question: str | None, answer_text: str | None) -> dict:
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "answer_source": source,
         "notes": take_notes(),
+        "question_type": "opinion" if question and _OPINION_Q.search(question) else "factual",
     }
     AnalysisResult.model_validate(result)
     db.save_analysis(result)

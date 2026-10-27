@@ -14,6 +14,7 @@ function outcomeOf(result: AnalysisResult): SceneMode {
   // no claims checked at all is not "verified"
   if (verdicts.length === 0) return "unverifiable";
   if (verdicts.includes("contradicted")) return "contradicted";
+  if (result.question_type === "opinion") return "unverifiable";
   // otherwise the overall look follows the trust score: mostly confirmed reads as verified
   return result.trust_score.trust_score >= 0.75 ? "supported" : "unverifiable";
 }
@@ -148,6 +149,11 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
               <span>Answer</span>
               {result.question && <span className="muted">Q: {result.question}</span>}
             </div>
+            {result.question_type === "opinion" && (
+              <p className="opinion-note" role="note">
+                Opinion question: there is no single true answer. TrustLens checks the facts in the answer, not the opinion.
+              </p>
+            )}
             <AnswerView analysis={result} />
             {result.answer_source && <p className="muted small disclaimer">Answer by {result.answer_source}</p>}
             {result.notes?.map((n) => (

@@ -81,6 +81,7 @@ export interface AnalysisResult {
   trust_score: TrustScore;
   created_at: string | null;
   answer_source?: string | null;
+  question_type?: string;
   notes?: string[];
 }
 
