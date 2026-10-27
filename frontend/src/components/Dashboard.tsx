@@ -1,3 +1,4 @@
+import LimitNotice from "./LimitNotice";
 import { useState, type FormEvent } from "react";
 import { ApiError, client as defaultClient, type TrustLensClient } from "../api/client";
 import type { AnalysisResult } from "../types/trustlens";
@@ -10,7 +11,8 @@ import { percent } from "./verdict";
 function outcomeOf(result: AnalysisResult): SceneMode {
   const verdicts = result.decisions.map((d) => d.final_verdict);
   if (verdicts.includes("contradicted")) return "contradicted";
-  if (verdicts.includes("unverifiable")) return "unverifiable";
+  // no claims checked at all is not "verified"
+  if (verdicts.length === 0 || verdicts.includes("unverifiable")) return "unverifiable";
   return "supported";
 }
 
@@ -74,11 +76,23 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
             <label htmlFor="question" className="sr-only">
               Ask a question and TrustLens checks the AI's answer claim by claim
             </label>
-            <input
+            <textarea
               id="question"
+              rows={1}
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="> Tell me about A. P. J. Abdul Kalam."
+              onChange={(e) => {
+                setQuestion(e.target.value);
+                // grow with the text so the whole question is always visible
+                e.target.style.height = "auto";
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder="> Ask anything…"
               autoComplete="off"
             />
             <div className="ask-actions">
@@ -92,6 +106,8 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
               )}
             </div>
           </form>
+
+          <LimitNotice analysis={result} />
 
           {error && (
             <p className="error" role="alert">

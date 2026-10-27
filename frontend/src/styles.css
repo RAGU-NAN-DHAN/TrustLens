@@ -222,7 +222,8 @@ nav {
   margin: 18px 0 28px;
 }
 
-.ask input {
+.ask input,
+.ask textarea {
   width: 100%;
   background: var(--panel);
   border: 1px solid var(--line-2);
@@ -231,11 +232,13 @@ nav {
   font: inherit;
 }
 
-.ask input::placeholder {
+.ask input::placeholder,
+.ask textarea::placeholder {
   color: var(--dim);
 }
 
-.ask input:focus {
+.ask input:focus,
+.ask textarea:focus {
   outline: none;
   border-color: var(--text);
 }
@@ -971,4 +974,102 @@ mark {
   color: var(--sup);
   font-size: 12px;
   margin-left: 6px;
+}
+
+.ask textarea {
+  display: block;
+  resize: none;
+  overflow: hidden;
+  min-height: 48px;
+  line-height: 1.5;
+}
+
+/* shown when an API limit was hit: a battery that drains and refills */
+.limit-notice {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--unv-rgb), 0.55);
+  animation: limit-in 0.5s ease-out;
+}
+
+.limit-notice.limit-degraded {
+  border-color: rgba(var(--con-rgb), 0.6);
+}
+
+.limit-notice b {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--unv);
+}
+
+.limit-degraded b {
+  color: var(--con);
+}
+
+.limit-notice p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.battery {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-top: 2px;
+  border: 1px solid var(--unv);
+}
+
+.battery::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 6px;
+  width: 3px;
+  height: 8px;
+  background: var(--unv);
+}
+
+.battery .cell {
+  width: 6px;
+  height: 14px;
+  background: var(--unv);
+  animation: cell-drain 2.4s steps(1) infinite;
+}
+
+.limit-degraded .battery,
+.limit-degraded .battery::after {
+  border-color: var(--con);
+}
+
+.limit-degraded .battery::after,
+.limit-degraded .battery .cell {
+  background: var(--con);
+}
+
+/* cells empty right to left, then the backup "recharges" them */
+.battery .cell:nth-child(4) { animation-delay: 0s; }
+.battery .cell:nth-child(3) { animation-delay: -0.6s; }
+.battery .cell:nth-child(2) { animation-delay: -1.2s; }
+.battery .cell:nth-child(1) { animation-delay: -1.8s; }
+
+@keyframes cell-drain {
+  0% { opacity: 1; }
+  50% { opacity: 0.12; }
+}
+
+@keyframes limit-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battery .cell,
+  .limit-notice { animation: none; }
 }

@@ -13,9 +13,9 @@ const FADE_MS = 600;
 
 const RADAR_AFTER_MS = 2500;
 // before any new animation the eyes appear, react in that state's colour, then hand over
-const EYES_MS = 1200;
+const EYES_MS = 600;
 // then the eyes shrink into the centre while the action's animation grows out of that point
-const HANDOFF_MS = 700;
+const HANDOFF_MS = 450;
 
 function heatRamp(v: number): RGB {
   // 0 = dark ember, 1 = white-yellow core
@@ -381,13 +381,10 @@ export default function LensScene({ mode, palette }: Props) {
         const ex = cx + side * unit * 1.55 + eyes.gx * 0.6 + shake;
         const ey = cy + eyes.gy * 0.5 + breathe - bounce - (side > 0 ? mood.doubt * unit * 0.25 : 0);
         sg.globalCompositeOperation = "source-over";
-        sg.shadowColor = `rgba(${r},${g},${b},0.9)`;
-        sg.shadowBlur = lightPage ? 6 : unit * 0.5;
         sg.fillStyle = `rgb(${r},${g},${b})`;
         sg.beginPath();
         sg.ellipse(ex, ey, ew, eh, 0, 0, Math.PI * 2);
         sg.fill();
-        sg.shadowBlur = 0;
         sg.fillStyle = lightPage ? "rgba(255,255,255,0.7)" : "rgba(255,248,230,0.85)";
         sg.beginPath();
         sg.ellipse(ex - ew * 0.3 + eyes.gx * 0.3, ey - eh * 0.35 + eyes.gy * 0.25, ew * 0.22, Math.max(1, eh * 0.16), 0, 0, Math.PI * 2);
@@ -421,6 +418,8 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.save();
       ctx!.setTransform(1, 0, 0, 1, 0, 0);
       ctx!.globalAlpha = alpha;
+      ctx!.shadowColor = `rgba(${r},${g},${b},0.9)`;
+      ctx!.shadowBlur = (lightPage ? 6 : unit * 0.5) * dpr;
       ctx!.drawImage(sheet, 0, 0);
       ctx!.restore();
     }
@@ -482,7 +481,7 @@ export default function LensScene({ mode, palette }: Props) {
       ctx!.fillStyle = glow;
       ctx!.fillRect(0, 0, width, height);
 
-      const grow = m.current === "idle" || m.current === "loading" || m.current === "supported" ? 1 : 0.35 + 0.65 * (1 - Math.pow(1 - fade, 3));
+      const grow = 1;
       ctx!.save();
       ctx!.translate(width / 2, height / 2);
       ctx!.scale(grow, grow);
@@ -522,7 +521,7 @@ export default function LensScene({ mode, palette }: Props) {
       }
       else if (since < lead + HANDOFF_MS) {
         const hand = clamp((since - lead) / HANDOFF_MS);
-        drawEyes(m.current, 1 - hand, loading ? 0 : hand, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
+        drawEyes(m.current, 1 - hand, 0, now, since < lead ? Math.sin(clamp(since / lead) * Math.PI) * 0.6 : 0);
       }
 
       frame = requestAnimationFrame(draw);
