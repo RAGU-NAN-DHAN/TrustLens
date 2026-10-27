@@ -44,7 +44,7 @@ def take_notes() -> list[str]:
     return out
 
 
-def _post_failover(url: str, keys: list[str], body: dict, timeout: float) -> httpx.Response:
+def _post_failover(url: str, keys: list[str], body: dict, timeout: float, patient: bool = True) -> httpx.Response:
     """Try each key once; a key that is out of quota or busy hands over to the next immediately.
     Only the last key gets the slower retry loop."""
     for i, key in enumerate(keys[:-1]):
@@ -52,6 +52,8 @@ def _post_failover(url: str, keys: list[str], body: dict, timeout: float) -> htt
         if resp.status_code not in (429, 500, 502, 503, 504):
             return resp
         note(f"Gemini key {i + 1} hit its limit (HTTP {resp.status_code}); switched to backup key {i + 2}.")
+    if not patient:  # optional extras (Google Search) give up at once instead of waiting out the limit
+        return httpx.post(url, headers={"x-goog-api-key": keys[-1]}, json=body, timeout=timeout)
     return _post(url, {"x-goog-api-key": keys[-1]}, body, timeout)
 
 
@@ -67,7 +69,7 @@ def call_gemini(prompt: str, model: str, api_key: str, timeout: float, search: b
     else:
         body["generationConfig"]["responseMimeType"] = "application/json"
     try:
-        resp = _post_failover(GEMINI_URL.format(model=model), keys, body, timeout)
+        resp = _post_failover(GEMINI_URL.format(model=model), keys, body, timeout, patient=not search)
         resp.raise_for_status()
         parts = resp.json()["candidates"][0]["content"]["parts"]
     except httpx.HTTPStatusError as exc:
