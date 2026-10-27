@@ -10,11 +10,13 @@ export default function VerifiedAnswer({ analysis }: { analysis: AnalysisResult 
   if (rows.length === 0) return null;
 
   let corrected = 0;
+  let removed = 0;
   let unconfirmed = 0;
   let kept = 0;
   for (const { decision } of rows) {
     if (decision!.final_verdict === "supported") kept++;
     else if (decision!.final_verdict === "contradicted" && decision!.correction_text) corrected++;
+    else if (decision!.final_verdict === "contradicted") removed++;
     else unconfirmed++;
   }
 
@@ -41,6 +43,13 @@ export default function VerifiedAnswer({ analysis }: { analysis: AnalysisResult 
               </span>
             );
           }
+          if (d.final_verdict === "contradicted") {
+            return (
+              <span key={claim.claim_id} className="va-false" title="The evidence contradicts this, but no checked correction could be written">
+                <s>{claim.text.replace(/\.?$/, "")}</s> <em>(false)</em>.{" "}
+              </span>
+            );
+          }
           return (
             <span key={claim.claim_id} className="va-unsure" title="No evidence confirmed or disproved this">
               {claim.text.replace(/\.?$/, "")} <em>(unconfirmed)</em>.{" "}
@@ -49,7 +58,7 @@ export default function VerifiedAnswer({ analysis }: { analysis: AnalysisResult 
         })}
       </p>
       <p className="muted small disclaimer">
-        {kept} confirmed · {corrected} corrected from evidence · {unconfirmed} unconfirmed
+        {kept} confirmed · {corrected} corrected from evidence{removed > 0 && ` · ${removed} shown false`} · {unconfirmed} unconfirmed
         {corrected > 0 && " · corrected parts are underlined; hover to see what the answer originally said"}
       </p>
     </div>

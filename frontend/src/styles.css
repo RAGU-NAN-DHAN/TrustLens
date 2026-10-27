@@ -1111,3 +1111,13 @@ mark {
   color: var(--sup);
   border-color: rgba(var(--sup-rgb), 0.5);
 }
+
+.va-false {
+  color: var(--muted);
+}
+
+.va-false em {
+  color: var(--con);
+  font-style: normal;
+  font-size: 12px;
+}

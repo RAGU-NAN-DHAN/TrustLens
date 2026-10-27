@@ -11,7 +11,9 @@ SUPPORT_THRESHOLD = 0.5
 MOCK_MATCH_THRESHOLD = 0.3
 
 _PROMPT = """A fact-checker found this CLAIM to be false.
-Using ONLY the EVIDENCE passages, write ONE short sentence stating what is actually true.
+Using ONLY the EVIDENCE passages, rewrite the CLAIM so it is true.
+- Keep the claim's subject and form; change only what is wrong.
+  e.g. CLAIM "Argentina won the 2026 FIFA World Cup" -> "<the team the evidence names> won the 2026 FIFA World Cup."
 - Do not add any fact, number or name that is not in the evidence.
 - If the evidence does not state the true fact, return an empty string.
 

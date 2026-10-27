@@ -134,7 +134,7 @@ def _background(question: str) -> list[dict]:
         queries = [f"{year} {topic}", f"{year - 1} {topic}", question]
     def search(q: str) -> list[dict]:
         try:
-            return retrieve_evidence(q, claim_id="q", k=3)
+            return retrieve_evidence(q, claim_id="q", k=10)
         except RetrievalError:
             return []
 
@@ -147,7 +147,8 @@ def _background(question: str) -> list[dict]:
             if n["passage"] not in seen:
                 seen.add(n["passage"])
                 notes.append(n)
-    return notes[:6]
+    # keep the passages most relevant to the question itself (keywords + meaning)
+    return rank_evidence(question, notes, top_k=8) if notes else []
 
 
 _search_off_until = 0.0  # Google Search grounding refused (free tier): don't retry it on every question
@@ -169,7 +170,9 @@ def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
             _search_off_until = time.monotonic() + 900
             note(f"Gemini Google Search unavailable ({exc}); answered from Wikipedia notes instead.")
     background = "\n".join(f"- {n['passage']}" for n in notes) or "- (no background notes found)"
-    prompt = (f"Today is {today}.\n{_RULES}\nFor recent or 'latest' questions prefer the background notes over your own memory.\n\n"
+    prompt = (f"Today is {today}.\n{_RULES}\nThe background notes are current; your memory may be out of date. "
+              "If the notes name the answer (a winner, a result, a date), use exactly what they say. "
+              "If they don't, don't guess a name or score: say what the notes do establish.\n\n"
               f"Background notes:\n{background}\n\nQuestion: {question}")
     answer, model = asyncio.run(m1_bridge.generate(prompt))
     return answer, f"{model} (M1 generator) + Wikipedia notes"
