@@ -61,6 +61,7 @@ def test_latest_questions_also_search_year_pages(monkeypatch):
         return [{"passage": f"note for {q}"}]
 
     monkeypatch.setattr(pipeline, "retrieve_evidence", fake_retrieve)
+    monkeypatch.setattr(pipeline, "_suggest_titles", lambda q: [])
     monkeypatch.setattr(pipeline, "_wiki_title", lambda topic: "Ballon d'Or" if topic == "Ballon dor" else topic)
     pipeline._background("Tell me about the latest Ballon dor Winner")
     year = pipeline.datetime.now(pipeline.timezone.utc).year
@@ -71,5 +72,6 @@ def test_latest_questions_also_search_year_pages(monkeypatch):
 def test_normal_questions_search_once(monkeypatch):
     queries = []
     monkeypatch.setattr(pipeline, "retrieve_evidence", lambda q, claim_id="", k=8: queries.append(q) or [])
+    monkeypatch.setattr(pipeline, "_suggest_titles", lambda q: [])
     pipeline._background("Who wrote Romeo and Juliet?")
     assert queries == ["Who wrote Romeo and Juliet?"]

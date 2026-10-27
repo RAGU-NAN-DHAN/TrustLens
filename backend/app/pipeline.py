@@ -14,7 +14,7 @@ import httpx
 
 from app import db
 from app.config import get_settings
-from app.services._llm import LLMCallError, call_gemini, note, take_notes
+from app.services._llm import LLMCallError, call_gemini, call_groq, note, parse_json_object, take_notes
 from app.errors import CorrectionError, TrustLensError, VerificationError
 from app.models.schemas import VERDICTS, AnalysisResult
 from app.services import m1_bridge
@@ -135,6 +135,23 @@ def _wiki_title(topic: str) -> str:
         return topic
 
 
+def _suggest_titles(question: str) -> list[str]:
+    """Up to 3 Wikipedia article titles likely to hold the answer ('csk head coach' -> 'Chennai Super Kings').
+    Search engines don't expand abbreviations or nicknames; a quick model call does."""
+    settings = get_settings()
+    if settings.mock or not settings.groq_api_key:
+        return []
+    prompt = ("List up to 3 exact English Wikipedia article titles most likely to contain the answer to the question. "
+              "Expand abbreviations and nicknames (e.g. CSK -> Chennai Super Kings). Do not answer the question.\n"
+              'Reply with JSON only: {"titles": ["..."]}\n\nQuestion: ' + question)
+    try:
+        data = parse_json_object(call_groq(prompt, os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"), settings.groq_api_key, 15))
+    except LLMCallError:
+        return []
+    titles = data.get("titles")
+    return [str(t).strip() for t in titles if str(t).strip()][:3] if isinstance(titles, list) else []
+
+
 def _background(question: str) -> list[dict]:
     """Wikipedia notes for the question. For 'latest/current' questions also search the
     year-specific pages (e.g. '2025 Ballon d'Or'), which name the most recent result."""
@@ -144,6 +161,8 @@ def _background(question: str) -> list[dict]:
     if _RECENT.search(question):
         year = datetime.now(timezone.utc).year
         queries = [f"{year} {topic}", f"{year - 1} {topic}", question]
+    # and the article titles a model suggests, which fixes abbreviations and loose phrasing
+    queries += [t for t in _suggest_titles(question) if t.lower() not in {q.lower() for q in queries}]
     def search(q: str) -> list[dict]:
         try:
             return retrieve_evidence(q, claim_id="q", k=10)
@@ -185,6 +204,7 @@ def _generate(question: str, notes: list[dict]) -> tuple[str, str]:
     rules = _OPINION_RULES if _OPINION_Q.search(question) else _RULES
     prompt = (f"Today is {today}.\n{rules}\nThe background notes are current; your memory may be out of date. "
               "When the notes name the answer (a winner, a result, a date), use exactly what they say. "
+              "If the notes show a change over time (someone replaced, took over, was appointed, left), the most recent one is the answer. "
               "Answer the question directly as a normal assistant: never mention notes, sources, background "
               "or 'provided information'.\n\n"
               f"Background notes:\n{background}\n\nQuestion: {question}")

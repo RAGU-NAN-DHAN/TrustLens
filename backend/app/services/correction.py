@@ -13,6 +13,7 @@ MOCK_MATCH_THRESHOLD = 0.3
 _PROMPT = """A fact-checker found this CLAIM to be false.
 Using ONLY the EVIDENCE passages, rewrite the CLAIM so it is true.
 - Keep the claim's subject and form; change only what is wrong.
+- The correction must be about the same subject as the claim (same team, person, event). If the evidence only has facts about something else, return an empty string.
   e.g. CLAIM "Argentina won the 2026 FIFA World Cup" -> "<the team the evidence names> won the 2026 FIFA World Cup."
 - Do not add any fact, number or name that is not in the evidence.
 - If the evidence does not state the true fact, return an empty string.
