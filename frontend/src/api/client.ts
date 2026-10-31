@@ -33,6 +33,13 @@ const mockSample = sample as AnalysisResult;
 export const liveSample = live as AnalysisResult;
 const isLiveRun = (a: AnalysisResult) => a.decisions.some((d) => d.verifier_results.some((r) => !r.model_version.startsWith("mock-")));
 
+export function isPastedAnswer(text: string): boolean {
+  const t = text.trim();
+  if (t.endsWith("?")) return false;
+  const sentences = t.split(/[.!]\s+/).filter((x) => x.trim().length > 0).length;
+  return sentences >= 2 || (t.length > 60 && /[.!]$/.test(t));
+}
+
 function copy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -128,7 +135,8 @@ export function createClient({ baseUrl, useMock, fetchImpl, sample: chosen }: Cl
       request<AnalysisResult>("/api/v1/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        // a pasted statement or paragraph is checked as-is; a question gets an answer written first
+        body: JSON.stringify(isPastedAnswer(question) ? { answer_text: question } : { question }),
       }),
     getAnalysis: (answerId) => request<AnalysisResult>(`/api/v1/analysis/${encodeURIComponent(answerId)}`),
     listHistory: () => request<HistoryItem[]>("/api/v1/history"),

@@ -95,7 +95,7 @@ export default function Dashboard({ client = defaultClient, result, onResult, on
                   e.currentTarget.form?.requestSubmit();
                 }
               }}
-              placeholder="> Ask anything…"
+              placeholder="> Ask anything, or paste an AI answer to check…"
               autoComplete="off"
             />
             <div className="ask-actions">
